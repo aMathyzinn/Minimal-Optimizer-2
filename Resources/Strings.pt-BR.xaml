@@ -1,0 +1,175 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <x:String x:Key="Text_SelectLanguage">Selecione o idioma</x:String>
+  <x:String x:Key="Label_English">English</x:String>
+  <x:String x:Key="Label_Portuguese">Português</x:String>
+
+  <x:String x:Key="Btn_Configure">⚙️ MODO DE OTIMIZAÇÃO</x:String>
+  <x:String x:Key="Btn_Optimize">OTIMIZAR</x:String>
+
+  <!-- Saúde do sistema (cards de monitoramento) -->
+  <x:String x:Key="Status_Good">✅ Normal</x:String>
+  <x:String x:Key="Status_Moderate">⚠ Moderado</x:String>
+  <x:String x:Key="Status_HighUse">🔴 Alto uso</x:String>
+
+  <!-- Ponto de restauração -->
+  <x:String x:Key="Btn_Backup">🛡️ Criar ponto de restauração antes de otimizar</x:String>
+  <x:String x:Key="Msg_BackupCreating">Criando ponto de restauração do Windows... (isto demora uns segundos)</x:String>
+  <x:String x:Key="Msg_BackupDone">Ponto de restauração criado! Seu PC está seguro.</x:String>
+  <x:String x:Key="Msg_BackupFailed">Não foi possível criar o ponto de restauração. Prosseguindo assim mesmo.</x:String>
+
+  <!-- Resultado pós-otimização -->
+  <x:String x:Key="Result_Completed">✅ Otimização concluída!</x:String>
+  <x:String x:Key="Result_RAMFreed">Memória liberada:</x:String>
+  <x:String x:Key="Result_LastRun">Última otimização:</x:String>
+
+  <!-- Plano de energia -->
+  <x:String x:Key="PowerPlan_Label">⚡ Plano de energia:</x:String>
+  <x:String x:Key="PowerPlan_Balanced">Balanceado</x:String>
+  <x:String x:Key="PowerPlan_High">Alta Performance</x:String>
+  <x:String x:Key="PowerPlan_Ultimate">Máxima</x:String>
+
+  <!-- Programas na inicialização -->
+  <x:String x:Key="Startup_Few">Tudo certo por aqui.</x:String>
+  <x:String x:Key="Startup_Moderate">Considere desativar alguns desnecessários.</x:String>
+  <x:String x:Key="Startup_Many">Muitos programas! Isso pode deixar o Windows mais lento.</x:String>
+  <x:String x:Key="Startup_Manage">Gerenciar →</x:String>
+  <x:String x:Key="Startup_Programs_Count">programas na inicialização</x:String>
+
+  <!-- Estatísticas de sessão -->
+  <x:String x:Key="Session_Stats_Prefix">📊 Esta sessão:  </x:String>
+  <x:String x:Key="Session_1_Opt">1 otimização</x:String>
+  <x:String x:Key="Btn_GameBoost">GAMEBOOST</x:String>
+  <x:String x:Key="Btn_GameBoost_Activate">ATIVAR GAMEBOOST</x:String>
+  <x:String x:Key="Btn_GameBoost_Deactivate">DESATIVAR GAMEBOOST</x:String>
+
+  <x:String x:Key="Toggle_AutoScroll_On">Auto-rolagem ON</x:String>
+  <x:String x:Key="Toggle_AutoScroll_Off">Auto-rolagem OFF</x:String>
+
+  <x:String x:Key="Tooltip_CopyAll">Copiar tudo</x:String>
+  <x:String x:Key="Tooltip_Clear">Limpar</x:String>
+  <x:String x:Key="Tooltip_Save">Salvar</x:String>
+
+  <!-- Seletor de Otimizações -->
+  <x:String x:Key="Title_Optimizations">Como prefere otimizar?</x:String>
+
+  <!-- Presets do seletor -->
+  <x:String x:Key="Preset_Quick_Name">Limpeza Rápida</x:String>
+  <x:String x:Key="Preset_Quick_Desc">Limpa arquivos inúteis e libera memória. Rápido e seguro.</x:String>
+  <x:String x:Key="Preset_Full_Name">Otimização Completa</x:String>
+  <x:String x:Key="Preset_Full_Desc">Deixa o PC mais rápido em geral. Inclui limpeza, rede e inicialização.</x:String>
+  <x:String x:Key="Preset_Gaming_Name">Foco em Jogos</x:String>
+  <x:String x:Key="Preset_Gaming_Desc">Aumenta o FPS e reduz travamentos. PC ajustado para gaming.</x:String>
+  <x:String x:Key="Preset_Recommended">Recomendado</x:String>
+  <x:String x:Key="Btn_SelectAll">Todas</x:String>
+  <x:String x:Key="Btn_DeselectAll">Nenhuma</x:String>
+  <x:String x:Key="Btn_Apply">Aplicar</x:String>
+  <x:String x:Key="Format_SelectedCount">{0} selecionadas</x:String>
+  <x:String x:Key="Msg_SelectAtLeastOne">Selecione pelo menos uma otimização para aplicar.</x:String>
+  <x:String x:Key="Msg_NoSelection">Nenhuma Seleção</x:String>
+
+  <!-- Itens de Otimização -->
+  <x:String x:Key="Opt_temp_files_name">Limpeza de Arquivos Temporários</x:String>
+  <x:String x:Key="Opt_temp_files_desc">Remove arquivos temporários e cache que não são mais necessários</x:String>
+  <x:String x:Key="Opt_registry_clean_name">Limpeza Interna do Windows</x:String>
+  <x:String x:Key="Opt_registry_clean_desc">Remove entradas antigas que deixam o Windows mais lento</x:String>
+  <x:String x:Key="Opt_system_cache_name">Limpeza de Cache do Sistema</x:String>
+  <x:String x:Key="Opt_system_cache_desc">Limpa arquivos temporários acumulados ao longo do tempo</x:String>
+  <x:String x:Key="Opt_memory_optimize_name">Otimização de Memória</x:String>
+  <x:String x:Key="Opt_memory_optimize_desc">Libera memória RAM desperdiçada por programas em segundo plano</x:String>
+  <x:String x:Key="Opt_disk_defrag_name">Organizar Disco</x:String>
+  <x:String x:Key="Opt_disk_defrag_desc">Organiza os arquivos do disco para acelerar o acesso</x:String>
+  <x:String x:Key="Opt_services_optimize_name">Otimização de Serviços</x:String>
+  <x:String x:Key="Opt_services_optimize_desc">Desativa funções do Windows que ficam rodando em segundo plano sem necessidade</x:String>
+  <x:String x:Key="Opt_system_logs_name">Limpeza de Histórico</x:String>
+  <x:String x:Key="Opt_system_logs_desc">Apaga registros antigos do sistema que nunca mais são usados</x:String>
+  <x:String x:Key="Opt_disk_cleanup_name">Limpeza do Disco</x:String>
+  <x:String x:Key="Opt_disk_cleanup_desc">Remove arquivos inúteis que ocupam espaço no HD/SSD</x:String>
+  <x:String x:Key="Opt_network_optimize_name">Otimização de Rede</x:String>
+  <x:String x:Key="Opt_network_optimize_desc">Acelera a internet e reduz o ping em jogos online</x:String>
+  <x:String x:Key="Opt_startup_optimize_name">Otimização de Inicialização</x:String>
+  <x:String x:Key="Opt_startup_optimize_desc">Remove programas que abrem sozinhos quando você liga o PC</x:String>
+  <x:String x:Key="Opt_visual_effects_name">Otimização de Efeitos Visuais</x:String>
+  <x:String x:Key="Opt_visual_effects_desc">Reduz animações visuais para deixar o Windows mais rápido</x:String>
+  <x:String x:Key="Opt_power_settings_name">Modo Alto Desempenho</x:String>
+  <x:String x:Key="Opt_power_settings_desc">Configura o PC para priorizar velocidade em vez de economia de energia</x:String>
+  <x:String x:Key="Opt_services_optimize_desc_alt">Desativa programas pesados que deixam o PC lento</x:String>
+  <x:String x:Key="Opt_startup_optimize_debloat_name">Limpeza ao Ligar</x:String>
+  <x:String x:Key="Opt_startup_optimize_debloat_desc">Remove programas desnecessários que abrem quando você liga o PC</x:String>
+  <x:String x:Key="Opt_fps_plus_name">Melhorar Jogos</x:String>
+  <x:String x:Key="Opt_fps_plus_desc">Reduz travamentos e aumenta os quadros por segundo nos jogos</x:String>
+  <x:String x:Key="Opt_fps_revert_name">Desfazer Melhorias de Jogos</x:String>
+  <x:String x:Key="Opt_fps_revert_desc">Reverte as configurações de jogos para o padrão do Windows</x:String>
+
+  <!-- Janela Sobre -->
+  <x:String x:Key="About_TitleBar">Sobre e Créditos</x:String>
+  <x:String x:Key="About_Subtitle">Sistema de Otimização Avançado</x:String>
+  <x:String x:Key="About_Developer">👨‍💻 Desenvolvedor</x:String>
+  <x:String x:Key="About_Links">🌐 Links Oficiais</x:String>
+  <x:String x:Key="About_Site">Site Oficial:</x:String>
+  <x:String x:Key="About_Discord">Discord:</x:String>
+  <x:String x:Key="About_YouTube">YouTube:</x:String>
+  <x:String x:Key="About_GitHub">GitHub:</x:String>
+  <x:String x:Key="About_Software">⚙️ Sobre o Software</x:String>
+  <x:String x:Key="About_Framework">Framework:</x:String>
+  <x:String x:Key="About_Interface">Interface:</x:String>
+  <x:String x:Key="About_Version">Versão:</x:String>
+
+  <!-- Labels da janela principal -->
+  <x:String x:Key="Label_CPU">CPU</x:String>
+  <x:String x:Key="Label_RAM">RAM</x:String>
+  <x:String x:Key="Label_DISK">DISCO</x:String>
+  <x:String x:Key="Advanced_Modules">O QUE DESEJA FAZER?</x:String>
+  <x:String x:Key="Status_SystemOptimized">Sistema Otimizado</x:String>
+  <x:String x:Key="Status_GameBoostMode">Modo GAMEBOOST</x:String>
+  <x:String x:Key="Separator_OptimizationCompleted">OTIMIZAÇÃO CONCLUÍDA</x:String>
+  <x:String x:Key="Msg_SystemAtMaxPerformance">Sistema operando com performance máxima</x:String>
+
+  <!-- Janela e saída de comandos -->
+  <x:String x:Key="Terminal_WindowTitle">Saída de Comandos</x:String>
+  <x:String x:Key="Terminal_Header">SAÍDA DE COMANDOS</x:String>
+  <x:String x:Key="Terminal_LiveBadge">ao vivo</x:String>
+  <x:String x:Key="Terminal_Ready">Sistema pronto para otimização...</x:String>
+  <x:String x:Key="Terminal_Starting">Iniciando...</x:String>
+  <x:String x:Key="Context_CopyAll">Copiar tudo</x:String>
+  <x:String x:Key="Context_Clear">Limpar</x:String>
+  <x:String x:Key="Context_SaveLog">Salvar log</x:String>
+
+  <!-- Controles GameBoost -->
+  <x:String x:Key="GameBoost_Waiting">GameBoost pronto. Abra um jogo para ativar.</x:String>
+  <x:String x:Key="Label_Aggressiveness">Intensidade</x:String>
+  <x:String x:Key="Agg_Low">Baixo</x:String>
+  <x:String x:Key="Agg_Medium">Médio</x:String>
+  <x:String x:Key="Agg_High">Alto</x:String>
+  <x:String x:Key="Agg_Extreme">Máximo</x:String>
+  <x:String x:Key="Suspended_NeutralizedCount">Processos pausados ({0})</x:String>
+  <x:String x:Key="Suspended_NeutralizedCount_Zero">Processos pausados (0)</x:String>
+  <x:String x:Key="Msg_GameBoostAggressivenessSet">Agressividade do GameBoost ajustada: {0}</x:String>
+
+  <!-- Progresso de otimização -->
+  <x:String x:Key="Separator_OptimizationStarting">INICIANDO OTIMIZAÇÃO PERSONALIZADA</x:String>
+  <x:String x:Key="Btn_Optimizing_Base">OTIMIZANDO</x:String>
+  <x:String x:Key="Loading_RunningOptimization">Executando otimização</x:String>
+
+  <!-- Bloco de Licença -->
+  <x:String x:Key="About_License">📄 Licença</x:String>
+  <x:String x:Key="About_LicenseText">Este software é distribuído sob a Licença Pública Geral GNU (GPL). Você tem a liberdade de usar, modificar e distribuir este software de acordo com os termos da GPL.</x:String>
+  <x:String x:Key="About_Copyright">© 2025-2026 aMathyzin Studio. Todos os direitos reservados.</x:String>
+
+  <!-- Janela de Disclaimer / Boas-vindas -->
+  <x:String x:Key="Disclaimer_Title">Antes de Começar</x:String>
+  <x:String x:Key="Disclaimer_Subtitle">Por favor, leia com atenção</x:String>
+  <x:String x:Key="Disclaimer_WhatIs">O que é o Minimal Optimizer?</x:String>
+  <x:String x:Key="Disclaimer_Description">O Minimal Optimizer é uma ferramenta gratuita e open-source desenvolvida para otimizar o desempenho do seu computador Windows. Ele realiza ajustes profundos no sistema operacional, registro e configurações para maximizar a performance, especialmente para jogos e aplicações pesadas.</x:String>
+  <x:String x:Key="Disclaimer_WhatItDoes">O que ele faz:</x:String>
+  <x:String x:Key="Disclaimer_Feature1">Limpa arquivos temporários, cache e lixo do sistema</x:String>
+  <x:String x:Key="Disclaimer_Feature2">Otimiza serviços do Windows e configurações de energia</x:String>
+  <x:String x:Key="Disclaimer_Feature3">Aplica ajustes para reduzir input lag e aumentar FPS em jogos</x:String>
+  <x:String x:Key="Disclaimer_Feature4">Ajusta configurações internas do Windows para melhor desempenho</x:String>
+  <x:String x:Key="Disclaimer_Feature5">Melhora a velocidade da internet e reduz o ping</x:String>
+  <x:String x:Key="Disclaimer_Warning">Aviso Importante</x:String>
+  <x:String x:Key="Disclaimer_WarningText">Este programa realiza modificações profundas no sistema operacional. Embora todas as otimizações sejam seguras e testadas, é recomendado criar um ponto de restauração antes de usar. O desenvolvedor não se responsabiliza por eventuais problemas. Use por sua conta e risco.</x:String>
+  <x:String x:Key="Disclaimer_Accept">Li, entendi e aceito os riscos de modificar as configurações do meu sistema</x:String>
+  <x:String x:Key="Disclaimer_Continue">Continuar</x:String>
+  <x:String x:Key="Disclaimer_Exit">Sair</x:String>
+</ResourceDictionary>

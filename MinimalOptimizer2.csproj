@@ -1,0 +1,78 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+
+    <!-- Informações principais do assembly / produto -->
+    <AssemblyTitle>Minimal Optimizer 2.0</AssemblyTitle>
+    <AssemblyDescription>Minimal Optimizer 2.0 é uma ferramenta avançada de otimização de sistema para Windows, desenvolvida em .NET 8 com WPF, focada em limpeza de RAM, otimização de serviços, inicialização e rede. Projeto open source mantido por aMathyzin.</AssemblyDescription>
+    <AssemblyVersion>2.0.1.0</AssemblyVersion>
+    <FileVersion>2.0.1.0</FileVersion>
+    <InformationalVersion>2.0.1-release</InformationalVersion>
+
+    <!-- Identidade do desenvolvedor / empresa -->
+    <Company>aMathyzin Studio</Company>
+    <Product>Minimal Optimizer 2.0</Product>
+    <Authors>aMathyzin</Authors>
+    <Copyright>© 2025-2026 aMathyzin Studio. Todos os direitos reservados.</Copyright>
+    <PackageProjectUrl>https://amathyzin.com.br</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/amathyzinn/Minimal-Optimizer-2.0</RepositoryUrl>
+    <PackageTags>optimizer;windows;performance;ram;network;startup;open-source;amathyzin;gameboost</PackageTags>
+
+    <!-- Contato e informações de suporte -->
+    <PackageReleaseNotes>Projeto open source de otimização de sistema para Windows, desenvolvido por aMathyzin (aMathyzin Studio). Site oficial: https://amathyzin.com.br | Contato: contato@amathyzin.com.br. O executável é assinado apenas com metadados de desenvolvedor (sem driver, sem injeção em jogos) para reduzir falsos positivos em antivírus.</PackageReleaseNotes>
+    <PackageIcon>Resources/icon.ico</PackageIcon>
+
+    <!-- Avisos para reduzir falsos positivos em antivírus -->
+    <Description>Minimal Optimizer 2.0 realiza otimizações somente em configurações de sistema, serviços, inicialização, cache e rede utilizando APIs públicas do Windows (.NET / WMI / Registry). Não contém mineradores, keyloggers, injeção em processos de jogos ou qualquer tipo de código malicioso. Código-fonte disponível para auditoria.</Description>
+
+    <!-- Build / runtime -->
+    <ApplicationIcon>Resources/icon.ico</ApplicationIcon>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- ⬇️ MODO LEVE: framework-dependent (não self-contained) -->
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+
+    <!-- Otimizações de runtime para release -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredCompilationQuickJit>true</TieredCompilationQuickJit>
+    <TieredPGO>true</TieredPGO>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+
+  <!-- Configurações de Release (sem lixo!) -->
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <Optimize>true</Optimize>
+    <DebugType>None</DebugType>               <!-- ❌ Remove .pdb -->
+    <DebugSymbols>false</DebugSymbols>        <!-- ❌ Remove símbolos -->
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en;pt-BR</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Pacotes -->
+  <ItemGroup>
+    <PackageReference Include="SharpVectors.Wpf" Version="1.8.5" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="9.0.10" />
+  </ItemGroup>
+
+  <!-- Recursos -->
+  <ItemGroup>
+    <Resource Include="Resources\app.png" />
+    <Resource Include="Resources\icon.ico" />
+    <Resource Include="Assets\Flags\us.svg" />
+    <Resource Include="Assets\Flags\br.svg" />
+    <Resource Include="Resources\Strings.pt-BR.xaml" />
+    <Resource Include="Resources\Strings.en-US.xaml" />
+  </ItemGroup>
+
+</Project>

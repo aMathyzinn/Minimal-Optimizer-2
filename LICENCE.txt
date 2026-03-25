@@ -1,0 +1,30 @@
+﻿Minimal Optimizer v2 — Licença (GPL 3.0)
+
+DESENVOLVEDOR: aMathyzinn
+Comunidade oficial: amathyzin
+Site: https://www.amathyzin.com.br
+GitHub: https://github.com/amathyzinn/Minimal-Optimizer-V2
+
+Declaração de Licença
+
+Minimal Optimizer é software livre e de código aberto, licenciado sob a GNU General Public License versão 3 (GPLv3).
+
+Você pode usar, copiar, modificar e distribuir este software, desde que:
+- As distribuições (originais ou modificadas) permaneçam sob os termos da GPLv3;
+- O código‑fonte correspondente seja disponibilizado ao destinatário;
+- Avisos de copyright e de licença sejam mantidos.
+
+Aviso de Garantia
+
+Este software é distribuído na esperança de ser útil, mas SEM QUALQUER GARANTIA; sem mesmo a garantia implícita de COMERCIABILIDADE ou ADEQUAÇÃO A UM PROPÓSITO ESPECÍFICO. Consulte a GPLv3 para detalhes.
+
+Autoria
+
+Total autoria ao criador aMathyzinn.
+
+Referências
+
+Texto oficial da licença (inglês): https://www.gnu.org/licenses/gpl-3.0.txt
+Informações sobre traduções: https://www.gnu.org/licenses/translations.html
+
+Ao prosseguir com a instalação, você declara estar de acordo com os termos acima.

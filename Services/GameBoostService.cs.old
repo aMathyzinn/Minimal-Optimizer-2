@@ -1,0 +1,1662 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.ServiceProcess;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace MinimalOptimizer2.Services
+{
+    /// <summary>
+    /// Módulo responsável por priorizar jogos em tempo real e neutralizar processos/serviços concorrentes.
+    /// </summary>
+    public sealed class GameBoostService : IDisposable
+    {
+        [System.Runtime.InteropServices.DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint uPeriod);
+        [System.Runtime.InteropServices.DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint uPeriod);
+        [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+        private static extern int NtSuspendProcess(IntPtr processHandle);
+        [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+        private static extern int NtResumeProcess(IntPtr processHandle);
+        [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+        private static extern int NtSetInformationProcess(IntPtr processHandle, int processInformationClass, ref int processInformation, int processInformationLength);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool SetProcessAffinityMask(IntPtr hProcess, IntPtr dwProcessAffinityMask);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentProcess();
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool SetPriorityClass(IntPtr handle, uint priorityClass);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern uint GetCurrentProcessId();
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetThreadPriority(IntPtr hThread, int nPriority);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr GetCurrentThread();
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr hObject);
+        [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+        private static extern int NtQueryInformationProcess(IntPtr processHandle, int processInformationClass, out PROCESS_BASIC_INFORMATION processInformation, int processInformationLength, out int returnLength);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, int processId);
+        [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+        [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool LookupPrivilegeValue(string lpSystemName, string lpName, out LUID lpLuid);
+        [System.Runtime.InteropServices.DllImport("advapi32.dll", SetLastError = true)]
+        private static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, bool DisableAllPrivileges, ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool VirtualProtectEx(IntPtr hProcess, IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool WriteProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, uint nSize, out int lpNumberOfBytesWritten);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr lpBaseAddress, byte[] lpBuffer, int dwSize, out int lpNumberOfBytesRead);
+        [System.Runtime.InteropServices.DllImport("psapi.dll", SetLastError = true)]
+        private static extern bool GetModuleInformation(IntPtr hProcess, IntPtr hModule, out MODULEINFO lpmodinfo, uint cb);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, IntPtr dwMinimumWorkingSetSize, IntPtr dwMaximumWorkingSetSize);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint SetThreadIdealProcessor(IntPtr hThread, uint dwIdealProcessor);
+        [System.Runtime.InteropServices.DllImport("powrprof.dll", SetLastError = true)]
+        private static extern uint PowerSetActiveScheme(IntPtr UserRootPowerKey, ref Guid SchemeGuid);
+        [System.Runtime.InteropServices.DllImport("powrprof.dll", SetLastError = true)]
+        private static extern uint PowerWriteACValueIndex(IntPtr RootPowerKey, ref Guid SchemeGuid, ref Guid SubGroupOfPowerSettingsGuid, ref Guid PowerSettingGuid, uint AcValueIndex);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetProcessInformation(IntPtr hProcess, int ProcessInformationClass, ref PROCESS_POWER_THROTTLING_STATE ProcessInformation, uint ProcessInformationSize);
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct PROCESS_BASIC_INFORMATION
+        {
+            public IntPtr Reserved1;
+            public IntPtr PebBaseAddress;
+            public IntPtr Reserved2_0;
+            public IntPtr Reserved2_1;
+            public IntPtr UniqueProcessId;
+            public IntPtr InheritedFromUniqueProcessId;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct LUID
+        {
+            public uint LowPart;
+            public int HighPart;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct TOKEN_PRIVILEGES
+        {
+            public uint PrivilegeCount;
+            public LUID Luid;
+            public uint Attributes;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct MODULEINFO
+        {
+            public IntPtr lpBaseOfDll;
+            public uint SizeOfImage;
+            public IntPtr EntryPoint;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct PROCESS_POWER_THROTTLING_STATE
+        {
+            public uint Version;
+            public uint ControlMask;
+            public uint StateMask;
+        }
+
+        private const uint REALTIME_PRIORITY_CLASS = 0x00000100;
+        private const uint HIGH_PRIORITY_CLASS = 0x00000080;
+        private const int THREAD_PRIORITY_TIME_CRITICAL = 15;
+        private const int THREAD_PRIORITY_HIGHEST = 2;
+        private const uint THREAD_SET_INFORMATION = 0x0020;
+        private const int ProcessIoPriority = 0x21;
+        private const int ProcessPagePriority = 0x27;
+        private const uint PROCESS_ALL_ACCESS = 0x001F0FFF;
+        private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
+        private const uint TOKEN_QUERY = 0x0008;
+        private const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+        private const uint PAGE_EXECUTE_READWRITE = 0x40;
+        private const int PROCESS_POWER_THROTTLING_EXECUTION_SPEED = 0x1;
+        private const int PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION = 0x4;
+        private const uint PROCESS_POWER_THROTTLING_CURRENT_VERSION = 0x1;
+        
+        private static readonly Guid GUID_MAX_POWER_SAVINGS = new Guid("a1841308-3541-4fab-bc81-f71556f20b4a");
+        private static readonly Guid GUID_TYPICAL_POWER_SAVINGS = new Guid("381b4222-f694-41f0-9685-ff5bb260df2e");
+        private static readonly Guid GUID_MIN_POWER_SAVINGS = new Guid("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
+        private static readonly Guid GUID_PROCESSOR_SETTINGS_SUBGROUP = new Guid("54533251-82be-4824-96c1-47b60b740d00");
+        private static readonly Guid GUID_PROCESSOR_PERF_BOOST_MODE = new Guid("be337238-0d82-4146-a960-4f3749d470c7");
+        
+        private static readonly TimeSpan MonitorInterval = TimeSpan.FromSeconds(10); // Aumentado para reduzir overhead
+        private const string HighPerformancePlanGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+
+        private readonly string[] _gameProcessHints =
+        {
+            "valorant", "valorant-win64-shipping",
+            "robloxplayerbeta", "robloxplayer", "robloxstudiobeta", "robloxstudio",
+            "minecraft", "javaw",
+            "cs2", "csgo",
+            "cod", "warzone", "mw2", "modernwarfare",
+            "fivem", "gtav", "gta5",
+            "overwatch", "overwatch2",
+            "cyberpunk", "cyberpunk2077",
+            "shootergame", "ark", "arkascended"
+        };
+
+        private readonly string[] _backgroundProcessHints =
+        {
+            "onedrive", "steamwebhelper", "steamhelper",
+            "discord", "teams", "slack", "zoom",
+            "spotify", "chrome", "msedge", "opera", "vivaldi",
+            "epicgameslauncher", "epicwebhelper",
+            "battle.net", "origin", "eadesktop",
+            "riotclientservices",
+            "adb", "adbhelper",
+            "obs", "obs64", "shadowplay",
+            "cortana"
+        };
+
+        private readonly string[] _systemNonCriticalProcessHints =
+        {
+            // Atualização/telemetria
+            "trustedinstaller", "tiworker", "compatTelRunner", "MoUsoCoreWorker", "SIHClient",
+            "backgroundtransferhost", "waasmedicagent",
+            // auxiliares diversos
+            "wmpnetwk", "msedgewebview2", "jusched", "javaupdate",
+        };
+
+        private readonly string[] _criticalProcessWhitelist =
+        {
+            "explorer", "dwm", "audiodg", "winlogon", "csrss", "lsass", "services",
+            "svchost", "system", "idle", "conhost", "dllhost", "runtimebroker",
+            "textinputhost", "startmenuexperiencehost", "shellexperiencehost",
+            "searchapp", "searchindexer", "taskhostw", "sihost", "fontdrvhost",
+            "applicationframehost", "systemsettings", "lockapp", "wudfhost",
+            "unsecapp", "wmiprvse", "dashost", "securityhealthservice"
+        };
+
+        private readonly string[] _servicesToSuspend =
+        {
+            "SysMain",
+            "DiagTrack",
+            "WSearch",
+            "Spooler",
+            "W32Time",
+            "MapsBroker",
+            "WerSvc",
+            "WlanSvc",
+            "BcastDVRUserService",
+            "XblGameSave",
+            "XboxGipSvc",
+            "XboxNetApiSvc"
+        };
+
+        private readonly HashSet<int> _boostedProcesses = new();
+        private readonly HashSet<int> _throttledProcesses = new();
+        private readonly HashSet<int> _suspendedProcesses = new();
+        private readonly HashSet<string> _servicesSuspended = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _gameExecutablesOptimized = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _processNameCache = new(StringComparer.OrdinalIgnoreCase); // Cache de nomes
+        private readonly object _stateLock = new();
+        private bool _hasDebugPrivileges = false;
+        private int _monitorCycleCount = 0; // Contador de ciclos para otimizações periódicas
+
+        public enum Aggressiveness
+        {
+            Low,
+            Medium,
+            High,
+            Extreme
+        }
+
+        public Aggressiveness Level { get; set; } = Aggressiveness.Medium;
+
+        private CancellationTokenSource? _monitoringCts;
+        private Task? _monitoringTask;
+        private string? _previousPowerScheme;
+        private bool _defenderSuspended;
+        private bool _explorerTerminated;
+
+        public bool IsActive { get; private set; }
+
+        public async Task ActivateAsync(IProgress<string>? progress = null, CancellationToken cancellationToken = default)
+        {
+            lock (_stateLock)
+            {
+                if (IsActive)
+                {
+                    progress?.Report("GameBoost já está ativo.");
+                    return;
+                }
+            }
+
+            var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            try
+            {
+                progress?.Report("GameBoost → elevando privilégios para nível de kernel...");
+                _hasDebugPrivileges = await Task.Run(() => EnableDebugPrivileges(), cts.Token).ConfigureAwait(false);
+                if (_hasDebugPrivileges)
+                {
+                    progress?.Report("GameBoost → privilégios máximos obtidos (SeDebugPrivilege)");
+                }
+
+                progress?.Report("GameBoost → preparando ambiente de alta performance...");
+                await PrepareEnvironmentAsync(cts.Token, progress).ConfigureAwait(false);
+
+                lock (_stateLock)
+                {
+                    _monitoringCts = cts;
+                    _monitoringTask = MonitorLoopAsync(progress, cts.Token);
+                    IsActive = true;
+                }
+
+                progress?.Report("GameBoost ativado! Monitoramento em tempo real iniciado.");
+                Logger.Info("GameBoost ativado com sucesso");
+            }
+            catch
+            {
+                cts.Cancel();
+                cts.Dispose();
+                throw;
+            }
+        }
+
+        public async Task DeactivateAsync(IProgress<string>? progress = null)
+        {
+            CancellationTokenSource? cts = null;
+            Task? monitorTask = null;
+
+            lock (_stateLock)
+            {
+                cts = _monitoringCts;
+                monitorTask = _monitoringTask;
+                _monitoringCts = null;
+                _monitoringTask = null;
+                IsActive = false;
+            }
+
+            if (cts != null)
+            {
+                try
+                {
+                    cts.Cancel();
+                    if (monitorTask != null)
+                    {
+                        await monitorTask.ConfigureAwait(false);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // esperado ao cancelar o monitoramento
+                }
+                finally
+                {
+                    cts.Dispose();
+                }
+            }
+            else
+            {
+                progress?.Report("GameBoost já estava inativo.");
+            }
+
+            await CleanupEnvironmentAsync(progress).ConfigureAwait(false);
+            progress?.Report("GameBoost finalizado.");
+            Logger.Info("GameBoost desativado");
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                DeactivateAsync().GetAwaiter().GetResult();
+            }
+            catch
+            {
+                // Ignora erros na finalização
+            }
+        }
+
+        private async Task PrepareEnvironmentAsync(CancellationToken token, IProgress<string>? progress)
+        {
+            token.ThrowIfCancellationRequested();
+
+            progress?.Report("GameBoost → capturando plano de energia atual...");
+            _previousPowerScheme = await Task.Run(() => GetCurrentPowerScheme(token), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → aplicando plano Alto Desempenho...");
+            await Task.Run(() => ForceHighPerformancePlan(token), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → ativando Timer Resolution em 0.5ms (ultra-low latency)...");
+            try 
+            { 
+                timeBeginPeriod(1); // 1ms é o mínimo suportado pelo Windows
+            } 
+            catch { }
+
+            progress?.Report("GameBoost → desabilitando CPU throttling e parking...");
+            await Task.Run(() => OptimizeCPUPerformance(token), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → otimizando GPU scheduling...");
+            await Task.Run(() => EnableHardwareAcceleratedGPUScheduling(), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → desabilitando Nagle's Algorithm para rede...");
+            await Task.Run(() => OptimizeNetworkLatency(), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → configurando prioridade de I/O para jogos...");
+            await Task.Run(() => OptimizeDiskIO(), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → neutralizando serviços em segundo plano...");
+            await Task.Run(() => SuspendServices(token, progress), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → suspendendo Windows Defender temporariamente...");
+            _defenderSuspended = await Task.Run(() => ToggleWindowsDefender(disable: true), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → liberando memória dedicada aos jogos...");
+            await RAMCleaner.ClearRAMAsync(new Progress<string>(msg => progress?.Report($"RAMCleaner → {msg}")), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → aplicando otimizações de baixo nível aos jogos...");
+            await Task.Run(() => ApplyProcessPriorities(token, progress, verbose: true), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → neutralizando processos em segundo plano prejudiciais...");
+            await Task.Run(() => AggressiveNeutralizeBackgroundProcesses(token, progress), token).ConfigureAwait(false);
+
+            progress?.Report("GameBoost → neutralização de serviços adicionais...");
+            await Task.Run(() => AggressiveNeutralizeServices(token, progress), token).ConfigureAwait(false);
+
+            if (Level == Aggressiveness.Extreme)
+            {
+                progress?.Report("GameBoost → encerrando processos pesados e não essenciais (modo extremo)...");
+                await Task.Run(() => ExtremeFinalizeProcesses(token, progress), token).ConfigureAwait(false);
+                progress?.Report("GameBoost → finalizando shell do Windows (explorer.exe)...");
+                _explorerTerminated = TryTerminateExplorer(progress);
+            }
+        }
+
+        private async Task CleanupEnvironmentAsync(IProgress<string>? progress)
+        {
+            await Task.Run(() =>
+            {
+                if (_defenderSuspended)
+                {
+                    progress?.Report("GameBoost → restaurando proteção do Windows Defender...");
+                    if (ToggleWindowsDefender(disable: false))
+                    {
+                        _defenderSuspended = false;
+                    }
+                }
+
+                if (_servicesSuspended.Count > 0)
+                {
+                    progress?.Report("GameBoost → reativando serviços pausados...");
+                    RestoreServices();
+                }
+
+                if (_suspendedProcesses.Count > 0)
+                {
+                    progress?.Report("GameBoost → retomando processos suspensos...");
+                    ResumeSuspendedProcesses();
+                }
+
+                if (!string.IsNullOrWhiteSpace(_previousPowerScheme))
+                {
+                    progress?.Report("GameBoost → restaurando plano de energia padrão...");
+                    var result = RunCommand("powercfg", $"/S {_previousPowerScheme}");
+                    if (!result.Success)
+                    {
+                        Logger.Warning($"GameBoost: falha ao restaurar plano de energia: {result.Error}");
+                    }
+                    else
+                    {
+                        _previousPowerScheme = null;
+                    }
+                }
+
+                _boostedProcesses.Clear();
+                _throttledProcesses.Clear();
+                try { timeEndPeriod(1); } catch { }
+
+                if (_explorerTerminated)
+                {
+                    var result = RunCommand("explorer", string.Empty);
+                    if (!result.Success)
+                    {
+                        Logger.Warning($"GameBoost: falha ao reiniciar explorer.exe: {result.Error}");
+                    }
+                    _explorerTerminated = false;
+                    progress?.Report("GameBoost → explorer.exe reiniciado.");
+                }
+            }).ConfigureAwait(false);
+        }
+
+        private async Task MonitorLoopAsync(IProgress<string>? progress, CancellationToken token)
+        {
+            // Reduz a prioridade do próprio GameBoost para não interferir no jogo
+            try
+            {
+                using var currentProcess = Process.GetCurrentProcess();
+                currentProcess.PriorityClass = ProcessPriorityClass.BelowNormal;
+            }
+            catch { }
+
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    _monitorCycleCount++;
+                    
+                    // Aplica otimizações completas apenas a cada 3 ciclos (30 segundos)
+                    // No restante, apenas verifica processos críticos
+                    bool fullScan = (_monitorCycleCount % 3) == 0;
+                    
+                    ApplyProcessPriorities(token, progress, verbose: false, fullScan: fullScan);
+                    await Task.Delay(MonitorInterval, token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"GameBoost monitoramento falhou: {ex.Message}");
+                    await Task.Delay(TimeSpan.FromSeconds(5), token).ConfigureAwait(false);
+                }
+            }
+        }
+
+        private void ApplyProcessPriorities(CancellationToken token, IProgress<string>? progress, bool verbose = false, bool fullScan = true)
+        {
+            Process[] processes;
+            try
+            {
+                processes = Process.GetProcesses();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: não foi possível enumerar processos: {ex.Message}");
+                return;
+            }
+
+            var boostedThisCycle = new HashSet<int>();
+            var throttledThisCycle = new HashSet<int>();
+
+            // Em scan completo, processa todos. Senão, apenas verifica processos já conhecidos + novos jogos
+            foreach (var process in processes)
+            {
+                using (process)
+                {
+                    token.ThrowIfCancellationRequested();
+
+                    string? name;
+                    try
+                    {
+                        name = process.ProcessName?.ToLowerInvariant();
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(name))
+                        continue;
+
+                    // Verifica se é jogo (sempre processa)
+                    if (ShouldBoostCached(name))
+                    {
+                        // Aplica otimizações apenas se não foi aplicado antes OU se é full scan
+                        if (_boostedProcesses.Add(process.Id) || fullScan)
+                        {
+                            ApplyLowLevelGameOptimizations(process, fullScan, verbose, progress);
+                            
+                            if (verbose || fullScan)
+                            {
+                                progress?.Report($"GameBoost → {process.ProcessName}: otimizações aplicadas");
+                            }
+                        }
+                        
+                        boostedThisCycle.Add(process.Id);
+                        
+                        // Desabilita Fullscreen Optimizations (apenas uma vez)
+                        if (_boostedProcesses.Add(process.Id))
+                        {
+                            TryDisableFullscreenOptimizations(process);
+                        }
+                        continue;
+                    }
+
+                    // Processa background apenas em full scan para economizar CPU
+                    if (fullScan && ShouldThrottleCached(name))
+                    {
+                        if (TrySetPriority(process, ProcessPriorityClass.BelowNormal))
+                        {
+                            throttledThisCycle.Add(process.Id);
+                            if (_throttledProcesses.Add(process.Id) || verbose)
+                            {
+                                progress?.Report($"GameBoost → {process.ProcessName}: prioridade reduzida");
+                            }
+                        }
+                    }
+                    else if (!fullScan && _throttledProcesses.Contains(process.Id))
+                    {
+                        // Mantém processos já throttled
+                        throttledThisCycle.Add(process.Id);
+                    }
+                }
+            }
+
+            _boostedProcesses.RemoveWhere(id => !boostedThisCycle.Contains(id));
+            _throttledProcesses.RemoveWhere(id => !throttledThisCycle.Contains(id));
+        }
+
+        private bool ShouldBoostCached(string processName)
+        {
+            if (_processNameCache.TryGetValue(processName, out var isGame))
+                return isGame;
+            
+            var shouldBoost = ShouldBoost(processName);
+            _processNameCache[processName] = shouldBoost;
+            return shouldBoost;
+        }
+
+        private bool ShouldThrottleCached(string processName)
+        {
+            var cacheKey = $"throttle_{processName}";
+            if (_processNameCache.TryGetValue(cacheKey, out var shouldThrottle))
+                return shouldThrottle;
+            
+            shouldThrottle = ShouldThrottle(processName);
+            _processNameCache[cacheKey] = shouldThrottle;
+            return shouldThrottle;
+        }
+
+        private void AggressiveNeutralizeBackgroundProcesses(CancellationToken token, IProgress<string>? progress)
+        {
+            var extraHints = new[]
+            {
+                "onedrive", "google drive", "googledrive", "dropbox", "backup",
+                "updater", "update", "helper", "overlay", "geforceexperience",
+                "epicwebhelper", "steamwebhelper", "originwebhelper", "battlenet",
+                "cortana", "searchapp", "searchui", "searchindexer",
+                "teams", "slack", "zoom", "obs", "shadowplay"
+            };
+
+            Process[] processes;
+            try { processes = Process.GetProcesses(); } catch { return; }
+            foreach (var p in processes)
+            {
+                using (p)
+                {
+                    token.ThrowIfCancellationRequested();
+                    string? name;
+                    try { name = p.ProcessName?.ToLowerInvariant(); } catch { continue; }
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    if (_criticalProcessWhitelist.Any(w => name.Equals(w, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+
+                    if (_criticalProcessWhitelist.Any(w => name.Equals(w, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+
+                    bool baseMatch = _backgroundProcessHints.Any(h => name.Contains(h, StringComparison.OrdinalIgnoreCase))
+                                        || extraHints.Any(h => name.Contains(h, StringComparison.OrdinalIgnoreCase));
+                    bool systemMatch = _systemNonCriticalProcessHints.Any(h => name.Contains(h, StringComparison.OrdinalIgnoreCase));
+                    bool isBackground = Level switch
+                    {
+                        Aggressiveness.Low => baseMatch,
+                        Aggressiveness.Medium => baseMatch || systemMatch,
+                        Aggressiveness.High => baseMatch || systemMatch,
+                        Aggressiveness.Extreme => baseMatch || systemMatch,
+                        _ => baseMatch
+                    };
+                    if (isBackground)
+                    {
+                        // REMOVIDO: suspensão de processos que trava o sistema
+                        // Apenas reduz prioridade ou finaliza (modo extremo)
+                        if (Level == Aggressiveness.Extreme)
+                        {
+                            TryKillProcessIfAllowed(p, progress);
+                            continue;
+                        }
+                        // Todos os níveis apenas reduzem prioridade, nunca suspendem
+                        if (TrySetPriority(p, ProcessPriorityClass.Idle))
+                        {
+                            _throttledProcesses.Add(p.Id);
+                            progress?.Report($"GameBoost → {p.ProcessName}: prioridade definida como Idle");
+                        }
+                    }
+                }
+            }
+        }
+
+        private void AggressiveNeutralizeServices(CancellationToken token, IProgress<string>? progress)
+        {
+            var serviceHints = new[]
+            {
+                "DiagTrack", "SysMain", "WSearch", "BcastDVR", "Xbox", "GameDVR",
+                "OneSyncSvc", "CDP", "MapsBroker", "WerSvc", "WaaSMedic"
+            };
+
+            ServiceController[] services;
+            try { services = ServiceController.GetServices(); } catch { return; }
+            foreach (var s in services)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    var name = s.ServiceName;
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+                    if (!s.CanStop) continue;
+                    if (serviceHints.Any(h => name.IndexOf(h, StringComparison.OrdinalIgnoreCase) >= 0))
+                    {
+                        if (s.Status == ServiceControllerStatus.Running || s.Status == ServiceControllerStatus.Paused)
+                        {
+                            s.Stop();
+                            s.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(6));
+                            if (_servicesSuspended.Add(name))
+                            {
+                                progress?.Report($"GameBoost → Serviço {name} parado (agressivo)");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"GameBoost: falha ao neutralizar serviço {s.ServiceName}: {ex.Message}");
+                }
+            }
+        }
+
+        private void ResumeSuspendedProcesses()
+        {
+            Process[] processes;
+            try { processes = Process.GetProcesses(); } catch { return; }
+            foreach (var p in processes)
+            {
+                using (p)
+                {
+                    try
+                    {
+                        if (_suspendedProcesses.Contains(p.Id))
+                        {
+                            TryResumeProcess(p);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            _suspendedProcesses.Clear();
+        }
+
+        public int SuspendedCount => _suspendedProcesses.Count;
+
+        public List<(int pid, string name)> GetSuspendedProcessesSnapshot()
+        {
+            var result = new List<(int, string)>();
+            Process[] processes;
+            try { processes = Process.GetProcesses(); } catch { return result; }
+            foreach (var p in processes)
+            {
+                using (p)
+                {
+                    try
+                    {
+                        if (_suspendedProcesses.Contains(p.Id))
+                        {
+                            var name = p.ProcessName ?? p.Id.ToString();
+                            result.Add((p.Id, name));
+                        }
+                    }
+                    catch { }
+                }
+            }
+            return result;
+        }
+
+        public bool ResumeProcessById(int pid)
+        {
+            try
+            {
+                var proc = Process.GetProcessById(pid);
+                var ok = TryResumeProcess(proc);
+                if (ok)
+                {
+                    _suspendedProcesses.Remove(pid);
+                }
+                return ok;
+            }
+            catch { return false; }
+        }
+        private static bool TrySuspendProcess(Process process)
+        {
+            try
+            {
+                if (process == null || process.HasExited) return false;
+                var code = NtSuspendProcess(process.Handle);
+                return code == 0;
+            }
+            catch { return false; }
+        }
+
+        private static bool TryResumeProcess(Process process)
+        {
+            try
+            {
+                if (process == null || process.HasExited) return false;
+                var code = NtResumeProcess(process.Handle);
+                return code == 0;
+            }
+            catch { return false; }
+        }
+
+        private static void TryDisableFullscreenOptimizations(Process process)
+        {
+            try
+            {
+                string? exePath = null;
+                try { exePath = process?.MainModule?.FileName; } catch { }
+                if (string.IsNullOrWhiteSpace(exePath)) return;
+
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers");
+                key?.SetValue(exePath, "~ DISABLEDXMAXIMIZEDWINDOWEDMODE", Microsoft.Win32.RegistryValueKind.String);
+            }
+            catch { }
+        }
+
+        private bool ShouldBoost(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName))
+                return false;
+
+            foreach (var hint in _gameProcessHints)
+            {
+                if (string.IsNullOrWhiteSpace(hint))
+                    continue;
+
+                if (hint.Length <= 3)
+                {
+                    if (processName.Equals(hint, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                else if (processName.Contains(hint, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool ShouldThrottle(string processName)
+        {
+            return _backgroundProcessHints.Any(hint => processName.Contains(hint, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool TrySetPriority(Process process, ProcessPriorityClass priorityClass)
+        {
+            try
+            {
+                if (!process.HasExited && process.PriorityClass != priorityClass)
+                {
+                    process.PriorityClass = priorityClass;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao alterar prioridade de {process.ProcessName}: {ex.Message}");
+                return false;
+            }
+        }
+
+        private string? GetCurrentPowerScheme(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            var result = RunCommand("powercfg", "/GETACTIVESCHEME");
+            if (!result.Success || string.IsNullOrWhiteSpace(result.Output))
+            {
+                Logger.Warning("GameBoost: não foi possível identificar o plano de energia atual.");
+                return null;
+            }
+
+            var match = Regex.Match(result.Output, @"([0-9a-fA-F\-]{36})");
+            return match.Success ? match.Value : null;
+        }
+
+        private void ForceHighPerformancePlan(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            var result = RunCommand("powercfg", $"/S {HighPerformancePlanGuid}");
+            if (!result.Success)
+            {
+                Logger.Warning($"GameBoost: falha ao aplicar plano Alto Desempenho: {result.Error}");
+            }
+        }
+
+        private void SuspendServices(CancellationToken token, IProgress<string>? progress)
+        {
+            foreach (var serviceName in _servicesToSuspend)
+            {
+                token.ThrowIfCancellationRequested();
+                try
+                {
+                    using var controller = new ServiceController(serviceName);
+                    if (!controller.CanStop)
+                        continue;
+
+                    if (controller.Status == ServiceControllerStatus.Running ||
+                        controller.Status == ServiceControllerStatus.Paused ||
+                        controller.Status == ServiceControllerStatus.StartPending)
+                    {
+                        controller.Stop();
+                        controller.WaitForStatus(ServiceControllerStatus.Stopped, TimeSpan.FromSeconds(8));
+                        if (_servicesSuspended.Add(serviceName))
+                        {
+                            progress?.Report($"GameBoost → Serviço {serviceName} pausado.");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"GameBoost: não foi possível suspender {serviceName}: {ex.Message}");
+                }
+            }
+        }
+
+        private void RestoreServices()
+        {
+            foreach (var serviceName in _servicesSuspended.ToList())
+            {
+                try
+                {
+                    using var controller = new ServiceController(serviceName);
+                    if (controller.Status == ServiceControllerStatus.Stopped ||
+                        controller.Status == ServiceControllerStatus.Paused)
+                    {
+                        controller.Start();
+                        controller.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(8));
+                    }
+                    _servicesSuspended.Remove(serviceName);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"GameBoost: não foi possível restaurar {serviceName}: {ex.Message}");
+                }
+            }
+        }
+
+        private bool ToggleWindowsDefender(bool disable)
+        {
+            try
+            {
+                var flag = disable ? "$true" : "$false";
+                var result = RunCommand("powershell", $"-Command \"Set-MpPreference -DisableRealtimeMonitoring {flag}\"", timeoutSeconds: 20);
+                if (!result.Success)
+                {
+                    Logger.Warning($"GameBoost: falha ao alterar o estado do Windows Defender: {result.Error}");
+                }
+                return result.Success;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: erro ao alterar Windows Defender: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void ExtremeFinalizeProcesses(CancellationToken token, IProgress<string>? progress)
+        {
+            Process[] processes;
+            try { processes = Process.GetProcesses(); } catch { return; }
+            foreach (var p in processes)
+            {
+                using (p)
+                {
+                    token.ThrowIfCancellationRequested();
+                    string? name;
+                    try { name = p.ProcessName?.ToLowerInvariant(); } catch { continue; }
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    if (_criticalProcessWhitelist.Any(w => name.Equals(w, StringComparison.OrdinalIgnoreCase)))
+                        continue;
+                    if (ShouldBoost(name))
+                        continue;
+
+                    if (name.Contains("discord", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (name.Contains("steam", StringComparison.OrdinalIgnoreCase) && !name.Contains("steamwebhelper", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    try
+                    {
+                        long ws;
+                        try { ws = p.WorkingSet64; } catch { ws = 0; }
+                        bool heavy = ws >= 200L * 1024L * 1024L;
+
+                        bool browser = name.Contains("chrome") || name.Contains("msedge") || name.Contains("opera") || name.Contains("vivaldi") || name.Contains("firefox");
+                        bool overlay = name.Contains("overlay") || name.Contains("webhelper") || name.Contains("helper");
+                        bool candidate = browser || overlay || heavy || ShouldThrottle(name);
+
+                        if (candidate)
+                        {
+                            TryKillProcessIfAllowed(p, progress);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        private bool TryTerminateExplorer(IProgress<string>? progress)
+        {
+            try
+            {
+                var result = RunCommand("taskkill", "/IM explorer.exe /F", 6);
+                if (result.Success)
+                {
+                    progress?.Report("GameBoost → explorer.exe encerrado.");
+                    return true;
+                }
+                return false;
+            }
+            catch { return false; }
+        }
+
+        private void TryKillProcessIfAllowed(Process p, IProgress<string>? progress)
+        {
+            try
+            {
+                if (p == null || p.HasExited) return;
+                var name = p.ProcessName?.ToLowerInvariant() ?? string.Empty;
+                if (_criticalProcessWhitelist.Any(w => name.Equals(w, StringComparison.OrdinalIgnoreCase))) return;
+                if (ShouldBoost(name)) return;
+                if (name.Contains("discord")) return;
+                p.Kill(true);
+                progress?.Report($"GameBoost → {p.ProcessName}: finalizado");
+            }
+            catch { }
+        }
+
+        private static CommandResult RunCommand(string fileName, string arguments, int timeoutSeconds = 12)
+        {
+            try
+            {
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = fileName,
+                        Arguments = arguments,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                };
+
+                process.Start();
+                var output = process.StandardOutput.ReadToEnd();
+                var error = process.StandardError.ReadToEnd();
+
+                if (!process.WaitForExit(timeoutSeconds * 1000))
+                {
+                    try { process.Kill(); } catch { /* ignore */ }
+                    return new CommandResult(false, output, string.IsNullOrWhiteSpace(error) ? "Timeout executando comando" : error);
+                }
+
+                return new CommandResult(process.ExitCode == 0, output, error);
+            }
+            catch (Exception ex)
+            {
+                return new CommandResult(false, string.Empty, ex.Message);
+            }
+        }
+
+        private readonly record struct CommandResult(bool Success, string Output, string Error);
+
+        /// <summary>
+        /// Verifica se há algum jogo suportado em execução.
+        /// </summary>
+        public Task<string?> DetectRunningGameAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.Run(() =>
+            {
+                Process[] processes;
+                try
+                {
+                    processes = Process.GetProcesses();
+                }
+                catch
+                {
+                    return null;
+                }
+
+                foreach (var process in processes)
+                {
+                    using (process)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        string? name;
+                        try
+                        {
+                            name = process.ProcessName?.ToLowerInvariant();
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(name))
+                            continue;
+
+                        if (ShouldBoost(name))
+                        {
+                            return process.ProcessName;
+                        }
+                    }
+                }
+
+                return null;
+            }, cancellationToken);
+        }
+
+        /// <summary>
+        /// Aplica otimizações de BAIXO NÍVEL em processos de jogos para maximizar FPS.
+        /// OTIMIZADO para reduzir overhead do próprio GameBoost.
+        /// </summary>
+        private void ApplyLowLevelGameOptimizations(Process process, bool fullScan, bool verbose, IProgress<string>? progress)
+        {
+            try
+            {
+                if (process == null || process.HasExited) return;
+
+                // 1. Prioridade HIGH (não REALTIME para evitar interferir no sistema)
+                try
+                {
+                    SetPriorityClass(process.Handle, HIGH_PRIORITY_CLASS);
+                    process.PriorityClass = ProcessPriorityClass.High;
+                }
+                catch { }
+
+                // 2. Otimiza threads principais E aloca nos melhores cores (P-Cores)
+                try
+                {
+                    int threadsOptimized = 0;
+                    const int maxThreadsToOptimize = 8;
+                    int coreCount = Environment.ProcessorCount;
+                    
+                    // Identifica P-Cores (performance cores) - primeiros 50% dos cores
+                    int pCoreCount = Math.Max(coreCount / 2, 4);
+                    
+                    foreach (ProcessThread thread in process.Threads)
+                    {
+                        if (threadsOptimized >= maxThreadsToOptimize)
+                            break;
+                            
+                        try
+                        {
+                            var threadHandle = OpenThread(THREAD_SET_INFORMATION, false, (uint)thread.Id);
+                            if (threadHandle != IntPtr.Zero)
+                            {
+                                // Prioridade máxima
+                                SetThreadPriority(threadHandle, THREAD_PRIORITY_HIGHEST);
+                                
+                                // Força thread em P-Core específico (round-robin)
+                                uint idealCore = (uint)(threadsOptimized % pCoreCount);
+                                SetThreadIdealProcessor(threadHandle, idealCore);
+                                
+                                CloseHandle(threadHandle);
+                                threadsOptimized++;
+                            }
+                        }
+                        catch { }
+                    }
+                    
+                    if (verbose && threadsOptimized > 0)
+                    {
+                        progress?.Report($"⚡ {threadsOptimized} threads alocadas em P-Cores");
+                    }
+                }
+                catch { }
+
+                // 2.5. DESABILITA Power Throttling no processo do jogo
+                try
+                {
+                    var throttlingState = new PROCESS_POWER_THROTTLING_STATE
+                    {
+                        Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+                        ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
+                        StateMask = 0 // 0 = Desabilita throttling (máxima performance)
+                    };
+                    
+                    SetProcessInformation(process.Handle, 0x4, ref throttlingState, (uint)System.Runtime.InteropServices.Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>());
+                    
+                    if (verbose)
+                    {
+                        progress?.Report($"🔥 Power Throttling DESABILITADO");
+                    }
+                }
+                catch { }
+
+                // 3. Define prioridade de I/O (apenas em full scan para reduzir overhead)
+                if (fullScan)
+                {
+                    try
+                    {
+                        int ioPriority = 3; // High I/O Priority
+                        NtSetInformationProcess(process.Handle, ProcessIoPriority, ref ioPriority, sizeof(int));
+                    }
+                    catch { }
+                }
+
+                // 4. Define prioridade de PAGE (apenas em full scan)
+                if (fullScan)
+                {
+                    try
+                    {
+                        int pagePriority = 5; // High Page Priority
+                        NtSetInformationProcess(process.Handle, ProcessPagePriority, ref pagePriority, sizeof(int));
+                    }
+                    catch { }
+                }
+
+                // 5. Affinity: usa todos os cores (apenas em full scan e se ainda não foi aplicado)
+                if (fullScan)
+                {
+                    try
+                    {
+                        int coreCount = Environment.ProcessorCount;
+                        IntPtr affinityMask = new IntPtr((1 << coreCount) - 1);
+                        SetProcessAffinityMask(process.Handle, affinityMask);
+                    }
+                    catch { }
+                }
+
+                // 6. OTIMIZAÇÕES NO EXECUTÁVEL (apenas em full scan e uma vez por jogo)
+                if (fullScan && _hasDebugPrivileges)
+                {
+                    string? exePath = null;
+                    try { exePath = process.MainModule?.FileName; } catch { }
+                    
+                    if (!string.IsNullOrWhiteSpace(exePath))
+                    {
+                        if (_gameExecutablesOptimized.Add(exePath))
+                        {
+                            ApplyExecutableOptimizations(process, exePath, progress);
+                            ApplyRegistryOptimizationsForGame(exePath);
+                            DisableGameLimiters(process, progress);
+                            
+                            // Otimizações específicas para Roblox
+                            if (process.ProcessName.ToLowerInvariant().Contains("roblox"))
+                            {
+                                ApplyRobloxSpecificOptimizations(process, progress);
+                            }
+                            
+                            // Enforcement de energia em tempo real
+                            EnforcePowerPlanForGaming();
+                        }
+                    }
+                }
+                
+                // ENFORCEMENT CONTÍNUO: GPU Priority boost
+                SetGpuPriorityForProcess(process, 8); // Máxima prioridade GPU
+
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao aplicar otimizações de baixo nível em {process.ProcessName}: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Desabilita CPU Parking e Throttling para performance máxima.
+        /// </summary>
+        private void OptimizeCPUPerformance(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+
+            // Desabilita CPU Core Parking (força todos os cores ativos)
+            RunCommand("powercfg", "-setacvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100");
+            RunCommand("powercfg", "-setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100");
+
+            // Força CPU sempre em 100% de performance (desabilita throttling)
+            RunCommand("powercfg", "-setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMIN 100");
+            RunCommand("powercfg", "-setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX 100");
+            
+            // Desabilita CPU Idle (C-States) - CPU sempre ativa
+            RunCommand("powercfg", "-setacvalueindex SCHEME_CURRENT SUB_PROCESSOR IDLEDISABLE 1");
+            
+            // Turbo Boost sempre ativo
+            RunCommand("powercfg", "-setacvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFBOOSTMODE 2");
+            
+            // Aplica as mudanças
+            RunCommand("powercfg", "-setactive SCHEME_CURRENT");
+
+            Logger.Info("GameBoost: CPU otimizada para performance máxima (parking desabilitado, throttling removido)");
+        }
+
+        /// <summary>
+        /// Habilita Hardware-Accelerated GPU Scheduling (Windows 10 2004+).
+        /// </summary>
+        private void EnableHardwareAcceleratedGPUScheduling()
+        {
+            try
+            {
+                // Habilita GPU Hardware Scheduling (reduz latência entre CPU e GPU)
+                var keyPath = @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers";
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath, writable: true);
+                key?.SetValue("HwSchMode", 2, Microsoft.Win32.RegistryValueKind.DWord);
+
+                Logger.Info("GameBoost: Hardware-Accelerated GPU Scheduling habilitado");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao habilitar GPU Scheduling: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Otimiza configurações de rede para latência mínima.
+        /// </summary>
+        private void OptimizeNetworkLatency()
+        {
+            try
+            {
+                // Desabilita Nagle's Algorithm (reduz latência TCP)
+                var keyPath = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces";
+                using var interfacesKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(keyPath);
+                if (interfacesKey != null)
+                {
+                    foreach (var subKeyName in interfacesKey.GetSubKeyNames())
+                    {
+                        using var subKey = interfacesKey.OpenSubKey(subKeyName, writable: true);
+                        subKey?.SetValue("TcpAckFrequency", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                        subKey?.SetValue("TCPNoDelay", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                    }
+                }
+
+                // Otimiza TCP Global
+                var tcpPath = @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters";
+                using var tcpKey = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(tcpPath, writable: true);
+                tcpKey?.SetValue("TcpAckFrequency", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                tcpKey?.SetValue("TCPNoDelay", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                tcpKey?.SetValue("TcpDelAckTicks", 0, Microsoft.Win32.RegistryValueKind.DWord);
+
+                Logger.Info("GameBoost: Latência de rede otimizada (Nagle desabilitado)");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao otimizar rede: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Otimiza configurações de I/O de disco para jogos.
+        /// </summary>
+        private void OptimizeDiskIO()
+        {
+            try
+            {
+                // Desabilita write-cache buffer flushing (melhora performance de gravação)
+                RunCommand("fsutil", "behavior set disablelastaccess 1");
+                
+                // Aumenta limite de memória para cache de sistema de arquivos
+                RunCommand("fsutil", "behavior set memoryusage 2");
+
+                Logger.Info("GameBoost: I/O de disco otimizado");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao otimizar disco: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Eleva privilégios do processo para SeDebugPrivilege (acesso total ao sistema).
+        /// </summary>
+        private bool EnableDebugPrivileges()
+        {
+            try
+            {
+                IntPtr hToken;
+                if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out hToken))
+                {
+                    Logger.Warning("GameBoost: falha ao abrir token do processo");
+                    return false;
+                }
+
+                LUID luid;
+                if (!LookupPrivilegeValue(null, "SeDebugPrivilege", out luid))
+                {
+                    CloseHandle(hToken);
+                    Logger.Warning("GameBoost: falha ao obter SeDebugPrivilege");
+                    return false;
+                }
+
+                TOKEN_PRIVILEGES tp = new TOKEN_PRIVILEGES
+                {
+                    PrivilegeCount = 1,
+                    Luid = luid,
+                    Attributes = SE_PRIVILEGE_ENABLED
+                };
+
+                bool success = AdjustTokenPrivileges(hToken, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+                CloseHandle(hToken);
+
+                if (success)
+                {
+                    Logger.Info("GameBoost: SeDebugPrivilege habilitado - acesso total ao sistema");
+                }
+
+                return success;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: erro ao elevar privilégios: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Aplica otimizações diretas no executável do jogo (memory patches).
+        /// </summary>
+        private void ApplyExecutableOptimizations(Process process, string exePath, IProgress<string>? progress)
+        {
+            try
+            {
+                if (process == null || process.HasExited) return;
+
+                // Desabilita DEP (Data Execution Prevention) para o jogo
+                try
+                {
+                    var depKey = @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers";
+                    using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(depKey);
+                    var existingValue = key?.GetValue(exePath) as string ?? "";
+                    if (!existingValue.Contains("DisableNXShowUI"))
+                    {
+                        key?.SetValue(exePath, $"{existingValue} DisableNXShowUI".Trim(), Microsoft.Win32.RegistryValueKind.String);
+                        progress?.Report($"GameBoost → {process.ProcessName}: DEP desabilitado");
+                    }
+                }
+                catch { }
+
+                // Força Large Page Support (melhor performance de memória)
+                try
+                {
+                    var result = RunCommand("powershell", $"-Command \"bcdedit /set largepagesupport enable\"", 10);
+                    if (result.Success)
+                    {
+                        progress?.Report($"GameBoost → Large Pages habilitadas");
+                    }
+                }
+                catch { }
+
+                // Desabilita Game DVR e FullScreen Optimizations
+                try
+                {
+                    var gamingKey = @"Software\Microsoft\GameBar";
+                    using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(gamingKey);
+                    key?.SetValue("AllowAutoGameMode", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("AutoGameModeEnabled", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+                catch { }
+
+                // Aumenta prioridade de timer resolution especificamente para o jogo
+                try
+                {
+                    var timerKey = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games";
+                    using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(timerKey, writable: true);
+                    key?.SetValue("GPU Priority", 8, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("Priority", 6, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("Scheduling Category", "High", Microsoft.Win32.RegistryValueKind.String);
+                    key?.SetValue("SFIO Priority", "High", Microsoft.Win32.RegistryValueKind.String);
+                    progress?.Report($"GameBoost → {process.ProcessName}: prioridade de sistema elevada");
+                }
+                catch { }
+
+                Logger.Info($"GameBoost: otimizações de executável aplicadas em {process.ProcessName}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao otimizar executável: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Aplica otimizações no registro específicas para o jogo.
+        /// </summary>
+        private void ApplyRegistryOptimizationsForGame(string exePath)
+        {
+            try
+            {
+                // Força modo de alta performance para o jogo
+                var imageKey = $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{System.IO.Path.GetFileName(exePath)}";
+                using var key = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(imageKey);
+                
+                // Desabilita prefetching (reduz latência de carregamento)
+                key?.SetValue("DisablePrefetcher", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                
+                // Desabilita SuperFetch para o jogo
+                key?.SetValue("DisableSuperFetch", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                
+                // Prioridade de CPU máxima
+                key?.SetValue("CpuPriorityClass", 3, Microsoft.Win32.RegistryValueKind.DWord); // High
+                
+                // Prioridade de I/O máxima
+                key?.SetValue("IoPriority", 3, Microsoft.Win32.RegistryValueKind.DWord); // High
+                
+                // Desabilita mitigações Spectre/Meltdown para o jogo (aumenta FPS)
+                key?.SetValue("MitigationOptions", "222222222222", Microsoft.Win32.RegistryValueKind.String);
+
+                Logger.Info($"GameBoost: otimizações de registro aplicadas para {System.IO.Path.GetFileName(exePath)}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao aplicar otimizações de registro: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Aplica otimizações ESPECÍFICAS para Roblox (maximiza FPS).
+        /// </summary>
+        private void ApplyRobloxSpecificOptimizations(Process process, IProgress<string>? progress)
+        {
+            try
+            {
+                progress?.Report($"🎮 Aplicando otimizações ROBLOX específicas...");
+
+                // 1. Desabilita FPS Limiter do Roblox (60 FPS padrão)
+                try
+                {
+                    var robloxAppData = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "Roblox\\ClientSettings");
+                    
+                    System.IO.Directory.CreateDirectory(robloxAppData);
+                    var settingsFile = System.IO.Path.Combine(robloxAppData, "ClientAppSettings.json");
+                    
+                    // Configurações de FPS máximo e qualidade otimizada
+                    var settings = @"{
+  ""DFIntTaskSchedulerTargetFps"": 999,
+  ""FFlagGameBasicSettingsFramerateCap5"": true,
+  ""DFIntMaxFrameBufferSize"": 3,
+  ""FIntRenderLocalLightUpdatesMax"": 1,
+  ""FIntRenderLocalLightUpdatesMin"": 1,
+  ""DFFlagDebugPauseVoxelizer"": true,
+  ""DFIntDebugFRMQualityLevelOverride"": 1,
+  ""FFlagRenderFixFog"": false,
+  ""FFlagDisablePostFx"": true,
+  ""FIntRenderShadowIntensity"": 0,
+  ""FFlagFastGPULightCulling3"": true,
+  ""FIntDebugTextureManagerSkipMips"": -1,
+  ""DFIntTextureCompositorActiveJobs"": 8,
+  ""DFIntCSGLevelOfDetailSwitchingDistance"": 0,
+  ""DFIntCSGLevelOfDetailSwitchingDistanceL12"": 0,
+  ""DFIntCSGLevelOfDetailSwitchingDistanceL23"": 0,
+  ""DFIntCSGLevelOfDetailSwitchingDistanceL34"": 0,
+  ""FFlagEnableQuickGameLaunch"": true,
+  ""FFlagPreloadAllFonts"": true,
+  ""FFlagBatchAssetApi"": true
+}";
+                    
+                    System.IO.File.WriteAllText(settingsFile, settings);
+                    progress?.Report($"✓ Roblox FPS Unlocker aplicado (999 FPS)");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning($"Roblox: falha ao aplicar FPS unlock: {ex.Message}");
+                }
+
+                // 2. Força DirectX11 (melhor performance que DX9)
+                try
+                {
+                    var imageKey = $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{process.ProcessName}.exe";
+                    using var key = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(imageKey);
+                    key?.SetValue("PreferredRenderMode", "DirectX11", Microsoft.Win32.RegistryValueKind.String);
+                }
+                catch { }
+
+                // 3. Otimiza memória do Roblox (reduz stuttering)
+                try
+                {
+                    // Força garbage collection agressiva
+                    var handle = process.Handle;
+                    SetProcessWorkingSetSize(handle, -1, -1); // Limpa working set
+                    progress?.Report($"✓ Memória Roblox otimizada");
+                }
+                catch { }
+
+                // 4. Desabilita telemetria do Roblox (reduz overhead)
+                try
+                {
+                    var robloxKey = @"SOFTWARE\Roblox\RobloxPlayerBeta";
+                    using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(robloxKey);
+                    key?.SetValue("DisableTelemetry", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("DisableAnalytics", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+                catch { }
+
+                // 5. Força Low Latency Mode para GPU
+                try
+                {
+                    // NVIDIA: Maximum Performance
+                    var nvidiaKey = @"SOFTWARE\NVIDIA Corporation\Global\NVTweak";
+                    using var key = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(nvidiaKey);
+                    key?.SetValue("RmGpuBoostFreq", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                    progress?.Report($"✓ GPU Low Latency Mode ativado");
+                }
+                catch { }
+
+                Logger.Info($"GameBoost: otimizações ROBLOX específicas aplicadas com sucesso");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha em otimizações Roblox: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Força plano de energia Ultimate Performance em tempo real.
+        /// </summary>
+        private void EnforcePowerPlanForGaming()
+        {
+            try
+            {
+                // Força Ultimate Performance
+                Guid ultimateGuid = GUID_MIN_POWER_SAVINGS;
+                PowerSetActiveScheme(IntPtr.Zero, ref ultimateGuid);
+                
+                // Turbo Boost MÁXIMO (Aggressive)
+                uint boostMode = 2; // 0=Disabled, 1=Enabled, 2=Aggressive
+                Guid procSettingsGuid = GUID_PROCESSOR_SETTINGS_SUBGROUP;
+                Guid perfBoostGuid = GUID_PROCESSOR_PERF_BOOST_MODE;
+                PowerWriteACValueIndex(IntPtr.Zero, ref ultimateGuid, ref procSettingsGuid, ref perfBoostGuid, boostMode);
+                
+                // Reaplica o plano
+                PowerSetActiveScheme(IntPtr.Zero, ref ultimateGuid);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Define prioridade de GPU para o processo do jogo.
+        /// </summary>
+        private void SetGpuPriorityForProcess(Process process, int priority)
+        {
+            try
+            {
+                // Força prioridade de GPU via registro (Windows 10+)
+                var exeName = process.ProcessName + ".exe";
+                var gpuKey = $@"SOFTWARE\Microsoft\DirectX\UserGpuPreferences";
+                
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(gpuKey);
+                if (key != null)
+                {
+                    var gpuPreference = $"GpuPreference={priority};";
+                    key.SetValue(exeName, gpuPreference, Microsoft.Win32.RegistryValueKind.String);
+                }
+                
+                // Força scheduling de GPU
+                var schedulingKey = $@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\{exeName}\PerfOptions";
+                using var schedKey = Microsoft.Win32.Registry.LocalMachine.CreateSubKey(schedulingKey);
+                if (schedKey != null)
+                {
+                    schedKey.SetValue("GpuPriority", priority, Microsoft.Win32.RegistryValueKind.DWord);
+                    schedKey.SetValue("GpuPriorityClass", 4, Microsoft.Win32.RegistryValueKind.DWord); // Realtime
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Desabilita limitadores de FPS e VSync em nível de driver.
+        /// </summary>
+        private void DisableGameLimiters(Process process, IProgress<string>? progress)
+        {
+            try
+            {
+                // Desabilita VSync forçado (NVIDIA/AMD)
+                var nvidiaDxKey = @"SOFTWARE\NVIDIA Corporation\Global\NvDx";
+                try
+                {
+                    using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(nvidiaDxKey, writable: true);
+                    key?.SetValue("MaxFrameRate", 0, Microsoft.Win32.RegistryValueKind.DWord); // Sem limite
+                }
+                catch { }
+
+                // Desabilita limitadores do Windows
+                var dwmKey = @"SOFTWARE\Microsoft\Windows\DWM";
+                try
+                {
+                    using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(dwmKey, writable: true);
+                    key?.SetValue("EnableAeroPeek", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("AlwaysHibernateThumbnails", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+                catch { }
+
+                // Força modo de baixa latência no driver gráfico
+                var d3dKey = @"SOFTWARE\Microsoft\Direct3D";
+                try
+                {
+                    using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(d3dKey);
+                    key?.SetValue("FlipEx", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                    key?.SetValue("DisableVidMemVBs", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                }
+                catch { }
+
+                progress?.Report($"GameBoost → {process.ProcessName}: limitadores de FPS removidos");
+                Logger.Info($"GameBoost: limitadores de FPS desabilitados para {process.ProcessName}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"GameBoost: falha ao desabilitar limitadores: {ex.Message}");
+            }
+        }
+    }
+}

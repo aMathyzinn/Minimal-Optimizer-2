@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400">
+  <!-- green background -->
+  <rect width="640" height="400" fill="#009b3a"/>
+  <!-- yellow diamond -->
+  <polygon points="320,60 560,200 320,340 80,200" fill="#ffdf00"/>
+  <!-- blue globe -->
+  <circle cx="320" cy="200" r="98" fill="#002776"/>
+  <!-- white band (simplified arc) -->
+  <path d="M 230 185 C 280 170 360 170 410 185" fill="none" stroke="#ffffff" stroke-width="16"/>
+  <!-- small white stars (simplified) -->
+  <g fill="#ffffff">
+    <circle cx="280" cy="180" r="3"/>
+    <circle cx="300" cy="190" r="3"/>
+    <circle cx="340" cy="185" r="3"/>
+    <circle cx="360" cy="195" r="3"/>
+    <circle cx="320" cy="205" r="3"/>
+    <circle cx="300" cy="215" r="3"/>
+    <circle cx="340" cy="215" r="3"/>
+  </g>
+</svg>

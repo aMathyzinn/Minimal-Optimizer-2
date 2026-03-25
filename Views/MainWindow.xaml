@@ -1,0 +1,1723 @@
+<Window x:Class="MinimalOptimizer2.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Minimal Optimizer 2.0" 
+        Height="800" 
+        Width="900"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize"
+        Background="Transparent"
+        WindowStyle="None"
+        AllowsTransparency="True">
+    
+    <!-- Recursos da janela para animações e estilos -->
+    <Window.Resources>
+        <!-- Animação de pulso para ícones de monitoramento -->
+        <Storyboard x:Key="IconPulseAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                           From="0.8" To="1.0" Duration="0:0:1.5"
+                           AutoReverse="True"/>
+        </Storyboard>
+        
+        <!-- Animação de brilho para texto de porcentagem -->
+        <Storyboard x:Key="PercentageGlowAnimation" RepeatBehavior="Forever">
+            <ColorAnimation Storyboard.TargetProperty="(TextBlock.Effect).(DropShadowEffect.Color)"
+                          From="#FF3333" To="#FF6666" Duration="0:0:2"
+                          AutoReverse="True"/>
+        </Storyboard>
+        
+        <!-- Estilo de barra de progresso com efeito Flame -->
+        <Style x:Key="FlameProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid x:Name="Root" ClipToBounds="True" SnapsToDevicePixels="True">
+                            <!-- Base -->
+                            <Border x:Name="PART_Track"
+                                    Height="{TemplateBinding Height}"
+                                    CornerRadius="7"
+                                    BorderThickness="1"
+                                    BorderBrush="#330000">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                        <GradientStop Color="#220000" Offset="0"/>
+                                         <GradientStop Color="#050000" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.Effect>
+                                    <BlurEffect Radius="3"/>
+                                </Border.Effect>
+                            </Border>
+
+                            <!-- Indicador preenchido -->
+                            <Border x:Name="PART_Indicator"
+                                    Height="{TemplateBinding Height}"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="6"
+                                    Margin="1,1,1,1"
+                                    ClipToBounds="True">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#FF5B1212" Offset="0"/>
+                                        <GradientStop Color="#FFED4D1C" Offset="0.35"/>
+                                        <GradientStop Color="#FFFFA24B" Offset="0.7"/>
+                                        <GradientStop Color="#FFFF431D" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.Effect>
+                                    <DropShadowEffect x:Name="IndicatorGlow" Color="#FFFF5A2A" BlurRadius="18" ShadowDepth="0" Opacity="0.95"/>
+                                </Border.Effect>
+
+                                <Grid>
+                                    <!-- textura interna -->
+                                    <Rectangle Fill="#15FFFFFF"/>
+
+                                    <!-- onda quente -->
+                                    <Rectangle x:Name="HeatWave" Opacity="0.4">
+                                        <Rectangle.Fill>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#80FFFFFF" Offset="0"/>
+                                                <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Rectangle.Fill>
+                                        <Rectangle.RenderTransform>
+                                            <TranslateTransform X="-120"/>
+                                        </Rectangle.RenderTransform>
+                                    </Rectangle>
+
+                                    <!-- ponta de chama que acompanha o preenchimento -->
+                                    <Grid x:Name="TipFlame"
+                                          Width="56"
+                                          HorizontalAlignment="Right"
+                                          Margin="0,-10,-4,-6"
+                                          RenderTransformOrigin="0.5,1">
+                                        <Grid.RenderTransform>
+                                            <ScaleTransform x:Name="TipScale" ScaleY="1"/>
+                                        </Grid.RenderTransform>
+                                        <Path x:Name="FlameBody" Data="M8,32 C18,5 40,0 56,32 L56,50 L8,50 Z">
+                                            <Path.Fill>
+                                                <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
+                                                    <GradientStop Color="#FFFFE29E" Offset="0"/>
+                                                    <GradientStop Color="#FFFF8C3E" Offset="0.5"/>
+                                                    <GradientStop Color="#FFFF3A1C" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Path.Fill>
+                                            <Path.Effect>
+                                                <BlurEffect Radius="5"/>
+                                            </Path.Effect>
+                                        </Path>
+                                        <Ellipse x:Name="FlameSpark"
+                                                 Width="16"
+                                                 Height="16"
+                                                 Fill="#FFFFF5CC"
+                                                 Opacity="0.9"
+                                                 HorizontalAlignment="Center"
+                                                 VerticalAlignment="Top"
+                                                 Margin="0,-6,0,0">
+                                            <Ellipse.RenderTransform>
+                                                <TranslateTransform Y="0"/>
+                                            </Ellipse.RenderTransform>
+                                            <Ellipse.Effect>
+                                                <DropShadowEffect Color="#FFFFD071" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                    </Grid>
+
+                                    <!-- faíscas que correm pela barra -->
+                                    <Canvas x:Name="SparkLayer" Height="14" Width="160" HorizontalAlignment="Right" IsHitTestVisible="False">
+                                        <Ellipse x:Name="SparkTrail1" Width="6" Height="6" Fill="#FFFFF8D2" Opacity="0" Canvas.Left="-30" Canvas.Top="3">
+                                            <Ellipse.Effect>
+                                                <BlurEffect Radius="6"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                        <Ellipse x:Name="SparkTrail2" Width="4" Height="4" Fill="#FFFFF8D2" Opacity="0" Canvas.Left="-60" Canvas.Top="8">
+                                            <Ellipse.Effect>
+                                                <BlurEffect Radius="4"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                    </Canvas>
+                                </Grid>
+                            </Border>
+
+                            <!-- Moldura externa -->
+                            <Border x:Name="FlameFrame" CornerRadius="7" BorderThickness="1" BorderBrush="#FFFF3A3A" Background="Transparent">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#FFFF3A3A" BlurRadius="8" ShadowDepth="0" Opacity="0.55"/>
+                                </Border.Effect>
+                            </Border>
+                        </Grid>
+
+                        <!-- Animações da chama -->
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Visibility" Value="Visible">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard RepeatBehavior="Forever">
+                                            <!-- Flicker -->
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="IndicatorGlow"
+                                                                           Storyboard.TargetProperty="BlurRadius">
+                                                <LinearDoubleKeyFrame Value="15" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="23" KeyTime="0:0:0.12"/>
+                                                <LinearDoubleKeyFrame Value="18" KeyTime="0:0:0.24"/>
+                                                <LinearDoubleKeyFrame Value="26" KeyTime="0:0:0.36"/>
+                                                <LinearDoubleKeyFrame Value="17" KeyTime="0:0:0.48"/>
+                                            </DoubleAnimationUsingKeyFrames>
+
+                        <!-- Heat wave deslizando -->
+                                            <DoubleAnimation Storyboard.TargetName="HeatWave"
+                                                            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                            From="-150" To="260" Duration="0:0:0.9" RepeatBehavior="Forever"/>
+
+                        <!-- Oscilação da chama -->
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="TipScale"
+                                                                           Storyboard.TargetProperty="ScaleY">
+                                                <LinearDoubleKeyFrame Value="1.0" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="1.4" KeyTime="0:0:0.2"/>
+                                                <LinearDoubleKeyFrame Value="0.9" KeyTime="0:0:0.35"/>
+                                                <LinearDoubleKeyFrame Value="1.3" KeyTime="0:0:0.5"/>
+                                                <LinearDoubleKeyFrame Value="1.0" KeyTime="0:0:0.7"/>
+                                            </DoubleAnimationUsingKeyFrames>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlameBody"
+                                                                           Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame Value="0.8" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0.2"/>
+                                                <LinearDoubleKeyFrame Value="0.65" KeyTime="0:0:0.4"/>
+                                                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0.55"/>
+                                            </DoubleAnimationUsingKeyFrames>
+
+                        <!-- Faísca no topo -->
+                                            <DoubleAnimation Storyboard.TargetName="FlameSpark"
+                                                            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                            From="0" To="-18" Duration="0:0:0.45" AutoReverse="True" RepeatBehavior="Forever"/>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="FlameSpark"
+                                                                           Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame Value="0.2" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="1" KeyTime="0:0:0.15"/>
+                                                <LinearDoubleKeyFrame Value="0.3" KeyTime="0:0:0.45"/>
+                                            </DoubleAnimationUsingKeyFrames>
+
+                        <!-- Trilha de faíscas que percorrem a barra -->
+                                            <DoubleAnimation Storyboard.TargetName="SparkTrail1"
+                                                            Storyboard.TargetProperty="(Canvas.Left)"
+                                                            From="-40" To="200" Duration="0:0:1.4" RepeatBehavior="Forever"/>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="SparkTrail1"
+                                                                           Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="0.9" KeyTime="0:0:0.3"/>
+                                                <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0.9"/>
+                                            </DoubleAnimationUsingKeyFrames>
+
+                                            <DoubleAnimation Storyboard.TargetName="SparkTrail2"
+                                                            Storyboard.TargetProperty="(Canvas.Left)"
+                                                            From="-80" To="160" Duration="0:0:1.1" RepeatBehavior="Forever" BeginTime="0:0:0.2"/>
+                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="SparkTrail2"
+                                                                           Storyboard.TargetProperty="Opacity">
+                                                <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0"/>
+                                                <LinearDoubleKeyFrame Value="0.6" KeyTime="0:0:0.25"/>
+                                                <LinearDoubleKeyFrame Value="0" KeyTime="0:0:0.7"/>
+                                            </DoubleAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Animação otimizada para o glow durante otimização -->
+        <Storyboard x:Key="OptimizingGlowAnimation" RepeatBehavior="Forever">
+            <DoubleAnimation Storyboard.TargetName="GlowRotation"
+                           Storyboard.TargetProperty="Angle"
+                           From="0" To="360" Duration="0:0:2" RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="FireRing"
+                           Storyboard.TargetProperty="Opacity"
+                           From="0" To="1"
+                           Duration="0:0:0.3"/>
+            <DoubleAnimation Storyboard.TargetName="FireRing"
+                           Storyboard.TargetProperty="StrokeThickness"
+                           From="5.5" To="6.5"
+                           AutoReverse="True"
+                           Duration="0:0:0.4"
+                           RepeatBehavior="Forever"/>
+            <DoubleAnimation Storyboard.TargetName="FireRing"
+                           Storyboard.TargetProperty="StrokeDashOffset"
+                           From="0" To="-16"
+                           Duration="0:0:0.5"
+                           RepeatBehavior="Forever"/>
+            <ColorAnimation Storyboard.TargetName="AnimatedGradient"
+                          Storyboard.TargetProperty="GradientStops[2].Color"
+                          From="#FF3333" To="#FF6666" Duration="0:0:2"
+                          AutoReverse="True" RepeatBehavior="Forever"/>
+            <ColorAnimation Storyboard.TargetName="AnimatedGradient"
+                          Storyboard.TargetProperty="GradientStops[3].Color"
+                          From="#DD3333" To="#FF4444" Duration="0:0:2"
+                          AutoReverse="True" RepeatBehavior="Forever"/>
+        </Storyboard>
+
+        <!-- Gradiente e textura para o botão OTIMIZAR -->
+        <LinearGradientBrush x:Key="OptimizeButtonGradient" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF3A2E" Offset="0"/>
+            <GradientStop Color="#FF1E1E" Offset="1"/>
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="OptimizeButtonHoverGradient" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF4A3A" Offset="0"/>
+            <GradientStop Color="#FF2A2A" Offset="1"/>
+        </LinearGradientBrush>
+
+        <VisualBrush x:Key="SoftTextureBrush" TileMode="Tile" Viewport="0,0,12,12" ViewportUnits="Absolute" Opacity="0.12">
+            <VisualBrush.Visual>
+                <Grid Width="12" Height="12" Background="Transparent">
+                    <Rectangle Width="12" Height="12" Fill="Transparent"/>
+                    <Rectangle Width="12" Height="1" VerticalAlignment="Top" Fill="#14FFFFFF"/>
+                    <Rectangle Width="12" Height="1" VerticalAlignment="Center" Fill="#0EFFFFFF"/>
+                    <Rectangle Width="12" Height="1" VerticalAlignment="Bottom" Fill="#14FFFFFF"/>
+                </Grid>
+            </VisualBrush.Visual>
+        </VisualBrush>
+
+        <!-- Estilo moderno do botão OTIMIZAR com textura, shape e animação de feedback -->
+         <Style x:Key="OptimizeButtonStyle" TargetType="Button">
+             <Setter Property="Background" Value="{StaticResource OptimizeButtonGradient}"/>
+             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+             <Setter Property="BorderThickness" Value="0"/>
+             <Setter Property="FontSize" Value="18"/>
+             <Setter Property="FontWeight" Value="SemiBold"/>
+             <Setter Property="Padding" Value="24,12"/>
+             <Setter Property="MinWidth" Value="240"/>
+             <Setter Property="Height" Value="52"/>
+             <Setter Property="Cursor" Value="Hand"/>
+             <Setter Property="Template">
+                 <Setter.Value>
+                     <ControlTemplate TargetType="Button">
+                         <Border x:Name="Root"
+                                 Background="{TemplateBinding Background}"
+                                 CornerRadius="0"
+                                 BorderThickness="1"
+                                 BorderBrush="#40FF3333"
+                                 RenderTransformOrigin="0.5,0.5">
+                             <Border.RenderTransform>
+                                 <ScaleTransform ScaleX="1" ScaleY="1"/>
+                             </Border.RenderTransform>
+                             <Border.Effect>
+                                 <DropShadowEffect Color="#FF3333" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
+                             </Border.Effect>
+                             <Grid ClipToBounds="True">
+                                 <!-- Textura suave -->
+                                 <Rectangle Fill="{StaticResource SoftTextureBrush}"/>
+
+                                 <!-- Brilho em varredura (sheen) -->
+                                 <Rectangle x:Name="Sheen" Opacity="0" Width="60">
+                                     <Rectangle.Fill>
+                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                             <GradientStop Color="#66FFFFFF" Offset="0"/>
+                                             <GradientStop Color="#22FFFFFF" Offset="0.5"/>
+                                             <GradientStop Color="#00FFFFFF" Offset="1"/>
+                                         </LinearGradientBrush>
+                                     </Rectangle.Fill>
+                                     <Rectangle.RenderTransform>
+                                         <TranslateTransform X="-220"/>
+                                     </Rectangle.RenderTransform>
+                                 </Rectangle>
+
+                                 <!-- Conteúdo com ícone -->
+                                 <Grid Margin="18,0">
+                                     <Grid.ColumnDefinitions>
+                                         <ColumnDefinition Width="Auto"/>
+                                         <ColumnDefinition Width="10"/>
+                                         <ColumnDefinition Width="*"/>
+                                     </Grid.ColumnDefinitions>
+                                     <!-- Shape (ícone de raio estilizado) -->
+                                     <Path Grid.Column="0" Width="16" Height="16" Stretch="Uniform"
+                                           Fill="#FFFFEEEE" Opacity="0.9"
+                                           Data="M2,10 L8,3 L6,10 L12,10 L6,17 L8,10 Z"/>
+                                     <ContentPresenter Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                 </Grid>
+                             </Grid>
+                         </Border>
+
+                         <!-- Triggers e animações -->
+                         <ControlTemplate.Triggers>
+                             <!-- Hover -->
+                             <Trigger Property="IsMouseOver" Value="True">
+                                 <Setter TargetName="Root" Property="Background" Value="{StaticResource OptimizeButtonHoverGradient}"/>
+                                 <Setter TargetName="Root" Property="Effect">
+                                     <Setter.Value>
+                                         <DropShadowEffect Color="#FF3333" BlurRadius="16" ShadowDepth="0" Opacity="0.55"/>
+                                     </Setter.Value>
+                                 </Setter>
+                             </Trigger>
+
+                             <!-- Press visual -->
+                             <Trigger Property="IsPressed" Value="True">
+                                 <Setter TargetName="Root" Property="RenderTransform">
+                                     <Setter.Value>
+                                         <ScaleTransform ScaleX="0.98" ScaleY="0.98"/>
+                                     </Setter.Value>
+                                 </Setter>
+                             </Trigger>
+
+                             <!-- Disabled -->
+                             <Trigger Property="IsEnabled" Value="False">
+                                 <Setter Property="Opacity" Value="0.6"/>
+                             </Trigger>
+
+                             <!-- Feedback de clique: pulso + varredura de brilho -->
+                             <EventTrigger RoutedEvent="Button.Click">
+                                 <BeginStoryboard>
+                                     <Storyboard>
+                                         <!-- Pulso -->
+                                         <DoubleAnimation Storyboard.TargetName="Root"
+                                                          Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                          To="0.97" Duration="0:0:0.10" AutoReverse="True"/>
+                                         <DoubleAnimation Storyboard.TargetName="Root"
+                                                          Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                          To="0.97" Duration="0:0:0.10" AutoReverse="True"/>
+                                         <!-- Sheen: atravessa o botão -->
+                                         <DoubleAnimation Storyboard.TargetName="Sheen"
+                                                          Storyboard.TargetProperty="Opacity"
+                                                          From="0" To="0.35" Duration="0:0:0.10" AutoReverse="True"/>
+                                         <DoubleAnimation Storyboard.TargetName="Sheen"
+                                                          Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                                                          From="-220" To="220" Duration="0:0:0.40"/>
+                                     </Storyboard>
+                                 </BeginStoryboard>
+                             </EventTrigger>
+                         </ControlTemplate.Triggers>
+                 </ControlTemplate>
+             </Setter.Value>
+         </Setter>
+     </Style>
+     <!-- Estilo do sub-botão GameBoost -->
+     <Style x:Key="GameBoostButtonStyle" TargetType="Button">
+         <Setter Property="Background">
+             <Setter.Value>
+                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                     <GradientStop Color="#3C1414" Offset="0"/>
+                     <GradientStop Color="#1C0606" Offset="1"/>
+                 </LinearGradientBrush>
+             </Setter.Value>
+         </Setter>
+         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+         <Setter Property="BorderThickness" Value="0"/>
+         <Setter Property="FontSize" Value="13"/>
+         <Setter Property="FontWeight" Value="SemiBold"/>
+         <Setter Property="Padding" Value="18,6"/>
+         <Setter Property="MinWidth" Value="150"/>
+         <Setter Property="Height" Value="34"/>
+         <Setter Property="Cursor" Value="Hand"/>
+         <Setter Property="Template">
+             <Setter.Value>
+                 <ControlTemplate TargetType="Button">
+                     <Border x:Name="Root"
+                             Background="{TemplateBinding Background}"
+                             CornerRadius="6"
+                             BorderThickness="1"
+                             BorderBrush="#55FF4444"
+                             RenderTransformOrigin="0.5,0.5">
+                         <Border.RenderTransform>
+                             <ScaleTransform ScaleX="1" ScaleY="1"/>
+                         </Border.RenderTransform>
+                         <Border.Effect>
+                             <DropShadowEffect Color="#FF3333" BlurRadius="8" ShadowDepth="0" Opacity="0.35"/>
+                         </Border.Effect>
+                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                     </Border>
+                     <ControlTemplate.Triggers>
+                         <Trigger Property="IsMouseOver" Value="True">
+                             <Setter TargetName="Root" Property="Background">
+                                 <Setter.Value>
+                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                         <GradientStop Color="#4A1E1E" Offset="0"/>
+                                         <GradientStop Color="#2A0C0C" Offset="1"/>
+                                     </LinearGradientBrush>
+                                 </Setter.Value>
+                             </Setter>
+                             <Setter TargetName="Root" Property="Effect">
+                                 <Setter.Value>
+                                     <DropShadowEffect Color="#FF5555" BlurRadius="12" ShadowDepth="0" Opacity="0.5"/>
+                                 </Setter.Value>
+                             </Setter>
+                         </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Root" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                </Setter.Value>
+                            </Setter>
+                        </Trigger>
+                         <Trigger Property="IsEnabled" Value="False">
+                             <Setter TargetName="Root" Property="Opacity" Value="0.55"/>
+                         </Trigger>
+                     </ControlTemplate.Triggers>
+                 </ControlTemplate>
+             </Setter.Value>
+         </Setter>
+     </Style>
+
+     <!-- Template do Toggle para ComboBox em formato pill -->
+     <ControlTemplate x:Key="ComboPillToggleTemplate" TargetType="ToggleButton">
+         <Border x:Name="Root"
+                 Background="{TemplateBinding Background}"
+                 BorderBrush="{TemplateBinding BorderBrush}"
+                 BorderThickness="{TemplateBinding BorderThickness}"
+                 CornerRadius="14">
+             <Grid>
+                 <ContentPresenter Margin="12,0,26,0" VerticalAlignment="Center"/>
+                 <Path Data="M 0 0 L 8 0 L 4 5 Z"
+                       Fill="{StaticResource SecondaryTextBrush}"
+                       HorizontalAlignment="Right"
+                       Margin="0,0,10,0"
+                       VerticalAlignment="Center"/>
+             </Grid>
+         </Border>
+         <ControlTemplate.Triggers>
+             <Trigger Property="IsMouseOver" Value="True">
+                 <Setter TargetName="Root" Property="BorderBrush" Value="#80FF3333"/>
+             </Trigger>
+             <Trigger Property="IsChecked" Value="True">
+                 <Setter TargetName="Root" Property="Background" Value="#2A2A2A"/>
+             </Trigger>
+             <Trigger Property="IsEnabled" Value="False">
+                 <Setter TargetName="Root" Property="Opacity" Value="0.6"/>
+             </Trigger>
+         </ControlTemplate.Triggers>
+     </ControlTemplate>
+
+     <!-- Estilo moderno para ComboBox em formato pill -->
+     <Style x:Key="PillComboBoxStyle" TargetType="ComboBox">
+         <Setter Property="Background" Value="#252525"/>
+         <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+         <Setter Property="BorderBrush" Value="#40FF3333"/>
+         <Setter Property="BorderThickness" Value="1"/>
+         <Setter Property="Padding" Value="12,6"/>
+         <Setter Property="Height" Value="28"/>
+         <Setter Property="Template">
+             <Setter.Value>
+                 <ControlTemplate TargetType="ComboBox">
+                     <Grid>
+                         <ToggleButton x:Name="ToggleButton"
+                                       Template="{StaticResource ComboPillToggleTemplate}"
+                                       Background="{TemplateBinding Background}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       BorderBrush="{TemplateBinding BorderBrush}"
+                                       BorderThickness="{TemplateBinding BorderThickness}"
+                                       Padding="{TemplateBinding Padding}"
+                                       IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                       Content="{TemplateBinding SelectionBoxItem}"
+                                       Focusable="False"/>
+                         <Popup x:Name="Popup"
+                                Placement="Bottom"
+                                StaysOpen="False"
+                                IsOpen="{TemplateBinding IsDropDownOpen}"
+                                AllowsTransparency="True"
+                                Focusable="False">
+                             <Border Background="{StaticResource SecondaryBackgroundBrush}"
+                                     BorderBrush="{StaticResource AccentBrush}"
+                                     BorderThickness="1"
+                                     CornerRadius="10">
+                                 <ScrollViewer Margin="4" Focusable="False">
+                                     <ItemsPresenter/>
+                                 </ScrollViewer>
+                             </Border>
+                         </Popup>
+                     </Grid>
+                     <ControlTemplate.Triggers>
+                         <Trigger Property="HasItems" Value="False">
+                             <Setter TargetName="Popup" Property="MinWidth" Value="100"/>
+                         </Trigger>
+                     </ControlTemplate.Triggers>
+                 </ControlTemplate>
+             </Setter.Value>
+         </Setter>
+         <Setter Property="ItemContainerStyle">
+             <Setter.Value>
+                 <Style TargetType="ComboBoxItem">
+                     <Setter Property="Background" Value="Transparent"/>
+                     <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                     <Setter Property="Padding" Value="10,6"/>
+                     <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                     <Setter Property="Template">
+                         <Setter.Value>
+                             <ControlTemplate TargetType="ComboBoxItem">
+                                 <Border x:Name="Border" Background="{TemplateBinding Background}" CornerRadius="6">
+                                     <ContentPresenter Margin="6,2,6,2"/>
+                                 </Border>
+                                 <ControlTemplate.Triggers>
+                                     <Trigger Property="IsHighlighted" Value="True">
+                                         <Setter TargetName="Border" Property="Background" Value="#22FFFFFF"/>
+                                     </Trigger>
+                                     <Trigger Property="IsSelected" Value="True">
+                                         <Setter TargetName="Border" Property="Background" Value="#33FF3333"/>
+                                     </Trigger>
+                                 </ControlTemplate.Triggers>
+                             </ControlTemplate>
+                         </Setter.Value>
+                     </Setter>
+                 </Style>
+             </Setter.Value>
+         </Setter>
+     </Style>
+
+     <!-- Botão tipo badge para contador de neutralizados -->
+     <Style x:Key="BadgeButtonStyle" TargetType="Button">
+         <Setter Property="Background" Value="#252525"/>
+         <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}"/>
+         <Setter Property="BorderBrush" Value="#40FF3333"/>
+         <Setter Property="BorderThickness" Value="1"/>
+         <Setter Property="Padding" Value="12,6"/>
+         <Setter Property="MinWidth" Value="150"/>
+         <Setter Property="Height" Value="28"/>
+         <Setter Property="Cursor" Value="Hand"/>
+         <Setter Property="Template">
+             <Setter.Value>
+                 <ControlTemplate TargetType="Button">
+                     <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14">
+                         <Grid>
+                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0"/>
+                             <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" HorizontalAlignment="Right" Margin="8,0,10,0" VerticalAlignment="Center"/>
+                         </Grid>
+                     </Border>
+                     <ControlTemplate.Triggers>
+                         <Trigger Property="IsMouseOver" Value="True">
+                             <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource AccentHoverBrush}"/>
+                         </Trigger>
+                         <Trigger Property="IsPressed" Value="True">
+                             <Setter TargetName="Root" Property="RenderTransform">
+                                 <Setter.Value>
+                                     <ScaleTransform ScaleX="0.98" ScaleY="0.98"/>
+                                 </Setter.Value>
+                             </Setter>
+                         </Trigger>
+                     </ControlTemplate.Triggers>
+                 </ControlTemplate>
+             </Setter.Value>
+         </Setter>
+    </Style>
+    
+    <!-- Animação de gradiente GameBoost ativo -->
+    <Storyboard x:Key="GameBoostActiveAnimation" RepeatBehavior="Forever">
+        <DoubleAnimation Storyboard.TargetName="GameBoostGradientRotation"
+                        Storyboard.TargetProperty="Angle"
+                        From="0" To="360" Duration="0:0:8"/>
+        <DoubleAnimation Storyboard.TargetName="GameBoostOverlay"
+                        Storyboard.TargetProperty="Opacity"
+                        From="0" To="0.15" Duration="0:0:0.5"/>
+    </Storyboard>
+    
+    <!-- Animação de pulso para indicador de RAM AutoClean -->
+    <Storyboard x:Key="RAMCleanPulseAnimation" RepeatBehavior="Forever">
+        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                        From="0.5" To="1.0" Duration="0:0:1"
+                        AutoReverse="True"/>
+    </Storyboard>
+    
+    <!-- Estilo para card com efeito de brilho suave -->
+    <Style x:Key="GlowCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource SecondaryBackgroundBrush}"/>
+        <Setter Property="BorderBrush" Value="#40FF3333"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="#FF3333" BlurRadius="10" ShadowDepth="0" Opacity="0.2"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    
+    <!-- Estilo para status badge animado -->
+    <Style x:Key="StatusBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="#22FF3333"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                <Setter Property="Background" Value="#3300FF00"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+   </Window.Resources>
+   
+   <Border CornerRadius="0" Background="{StaticResource BackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
+       <Border.Effect>
+           <DropShadowEffect Color="Black" BlurRadius="20" ShadowDepth="0" Opacity="0.5"/>
+       </Border.Effect>
+       <Grid>
+           <!-- Overlay de gradiente animado para GameBoost ativo -->
+           <Border x:Name="GameBoostOverlay" 
+                   Opacity="0"
+                   IsHitTestVisible="False"
+                   Panel.ZIndex="0">
+               <Border.Background>
+                   <RadialGradientBrush GradientOrigin="0.5,0.5" Center="0.5,0.5" RadiusX="1" RadiusY="1">
+                       <RadialGradientBrush.RelativeTransform>
+                           <RotateTransform x:Name="GameBoostGradientRotation" CenterX="0.5" CenterY="0.5" Angle="0"/>
+                       </RadialGradientBrush.RelativeTransform>
+                       <GradientStop Color="#00FF3333" Offset="0"/>
+                       <GradientStop Color="#33FF3333" Offset="0.3"/>
+                       <GradientStop Color="#55FF3333" Offset="0.6"/>
+                       <GradientStop Color="#22FF3333" Offset="0.8"/>
+                       <GradientStop Color="#00FF3333" Offset="1"/>
+                   </RadialGradientBrush>
+               </Border.Background>
+           </Border>
+           
+       <Grid Panel.ZIndex="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="30"/>
+            </Grid.RowDefinitions>
+            
+            <!-- Barra de título personalizada -->
+            <Grid Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" 
+                          Text="Minimal Optimizer 2.0" 
+                          Foreground="{StaticResource TextBrush}"
+                          FontSize="12"
+                          FontWeight="SemiBold"
+                          VerticalAlignment="Center"
+                          Margin="15,0"/>
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <ToggleButton x:Name="ModeToggle"
+                                  Style="{StaticResource AppModeToggleStyle}"
+                                  Margin="10,0,8,0"
+                                  Checked="ModeToggle_Checked"
+                                  Unchecked="ModeToggle_Unchecked"/>
+                    <Button Name="AboutButton" 
+                            Content="ℹ" 
+                            Width="40" 
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="{StaticResource TextBrush}"
+                            BorderThickness="0"
+                            FontSize="14"
+                            Click="AboutButton_Click"
+                            ToolTip="Sobre e Créditos"
+                            Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="0" BorderThickness="0">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF444444"/>
+                                        <Setter Property="Effect">
+                                            <Setter.Value>
+                                                <DropShadowEffect Color="#FFFFFF" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <Button Name="MinimizeButton" 
+                            Content="—" 
+                            Width="40" 
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="{StaticResource TextBrush}"
+                            BorderThickness="0"
+                            FontSize="14"
+                            Click="MinimizeButton_Click"
+                            Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="0" BorderThickness="0">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FF555555"/>
+                                        <Setter Property="Effect">
+                                            <Setter.Value>
+                                                <DropShadowEffect Color="#FFFFFF" BlurRadius="12" ShadowDepth="0" Opacity="0.8"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                    
+                    <Button Name="CloseButton" 
+                            Content="✕" 
+                            Width="40" 
+                            Height="40"
+                            Background="Transparent"
+                            Foreground="{StaticResource TextBrush}"
+                            BorderThickness="0"
+                            FontSize="12"
+                            Click="CloseButton_Click"
+                            Style="{x:Null}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="0" BorderThickness="0">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#FFCC3333"/>
+                                        <Setter Property="Effect">
+                                            <Setter.Value>
+                                                <DropShadowEffect Color="#FF6666" BlurRadius="15" ShadowDepth="0" Opacity="0.9"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Grid>
+            
+            <!-- Conteúdo principal -->
+                <Grid Grid.Row="1" Margin="20,10,20,10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                
+                <!-- Logo da aplicação com efeito de brilho animado -->
+                <Grid Grid.Row="0" Width="160" Height="160" Margin="0,10,0,16">
+                    
+                    <!-- Border com gradiente animado -->
+                    <Border x:Name="GlowBorder" 
+                            Width="160" 
+                            Height="160" 
+                            CornerRadius="80"
+                            BorderThickness="4"
+                            RenderTransformOrigin="0.5,0.5">
+                        <Border.BorderBrush>
+                            <LinearGradientBrush x:Name="AnimatedGradient" StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="Transparent" Offset="0"/>
+                                <GradientStop Color="Transparent" Offset="0.3"/>
+                                <GradientStop Color="#FF3333" Offset="0.5"/>
+                                <GradientStop Color="#FF6666" Offset="0.6"/>
+                                <GradientStop Color="#FF3333" Offset="0.7"/>
+                                <GradientStop Color="Transparent" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border.RenderTransform>
+                            <RotateTransform x:Name="GlowRotation" Angle="0"/>
+                        </Border.RenderTransform>
+                        <Border.Triggers>
+                            <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard x:Name="NormalGlowAnimation" RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="GlowRotation"
+                                                   Storyboard.TargetProperty="Angle"
+                                                   From="0" To="360" Duration="0:0:8"
+                                                   RepeatBehavior="Forever"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        </Border.Triggers>
+                    </Border>
+                    
+                    <!-- Anel de brasa animado (visível durante otimização) -->
+                    <Path x:Name="FireRing"
+                          Width="160"
+                          Height="160"
+                          StrokeThickness="6"
+                          Opacity="0"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          StrokeDashArray="2 14"
+                          StrokeDashOffset="0"
+                          RenderTransformOrigin="0.5,0.5">
+                        <Path.Data>
+                            <EllipseGeometry Center="80,80" RadiusX="75" RadiusY="75"/>
+                        </Path.Data>
+                        <Path.Stroke>
+                            <RadialGradientBrush GradientOrigin="0.5,0.5">
+                                <GradientStop Color="#FFFFB347" Offset="0.2"/>
+                                <GradientStop Color="#FFFF6B35" Offset="0.5"/>
+                                <GradientStop Color="#FFFF2B2B" Offset="0.8"/>
+                                <GradientStop Color="#00FF0000" Offset="1"/>
+                            </RadialGradientBrush>
+                        </Path.Stroke>
+                        <Path.Effect>
+                            <DropShadowEffect Color="#FFFF5522" BlurRadius="18" ShadowDepth="0" Opacity="0.8"/>
+                        </Path.Effect>
+                    </Path>
+                    
+                    <!-- Imagem centralizada -->
+                    <Image Source="../Resources/app.png" 
+                           Width="145" 
+                           Height="145" 
+                           RenderOptions.BitmapScalingMode="HighQuality">
+                        <Image.Effect>
+                            <DropShadowEffect Color="#FF3333" 
+                                            BlurRadius="20" 
+                                            ShadowDepth="0" 
+                                            Opacity="0.7"/>
+                        </Image.Effect>
+                    </Image>
+                </Grid>
+                
+                <!-- Informações do sistema em tempo real com ícones modernos -->
+                <Grid Grid.Row="1" Margin="0,0,0,30">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- CPU Card -->
+                    <Border Grid.Column="0" Background="{StaticResource SecondaryBackgroundBrush}" 
+                            CornerRadius="12" Padding="18" Margin="5"
+                            BorderThickness="1"
+                            BorderBrush="#30FF3333">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#FF3333" BlurRadius="15" ShadowDepth="0" Opacity="0.25"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Ícone CPU estilizado (microchip) -->
+                            <Viewbox Grid.Row="0" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                <Viewbox.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource IconPulseAnimation}"/>
+                                    </EventTrigger>
+                                </Viewbox.Triggers>
+                                <Canvas Width="64" Height="64">
+                                    <!-- Chip principal (contorno) -->
+                                    <Rectangle Canvas.Left="16" Canvas.Top="16" Width="32" Height="32"
+                                               Stroke="#FF3333" StrokeThickness="2" Fill="Transparent" RadiusX="3" RadiusY="3">
+                                        <Rectangle.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
+                                        </Rectangle.Effect>
+                                    </Rectangle>
+                                    <!-- Linhas internas do chip -->
+                                    <Rectangle Canvas.Left="20" Canvas.Top="20" Width="24" Height="24"
+                                               Stroke="#FF6666" StrokeThickness="1" Fill="Transparent"/>
+                                    <Line X1="32" Y1="22" X2="32" Y2="42" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <Line X1="22" Y1="32" X2="42" Y2="32" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <!-- Pinos laterais do chip -->
+                                    <Line X1="8" Y1="21" X2="14" Y2="21" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="8" Y1="27" X2="14" Y2="27" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="8" Y1="33" X2="14" Y2="33" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="8" Y1="39" X2="14" Y2="39" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="50" Y1="21" X2="56" Y2="21" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="50" Y1="27" X2="56" Y2="27" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="50" Y1="33" X2="56" Y2="33" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="50" Y1="39" X2="56" Y2="39" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <!-- Pinos superior/inferior -->
+                                    <Line X1="21" Y1="8" X2="21" Y2="14" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="27" Y1="8" X2="27" Y2="14" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="33" Y1="8" X2="33" Y2="14" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="39" Y1="8" X2="39" Y2="14" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="21" Y1="50" X2="21" Y2="56" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="27" Y1="50" X2="27" Y2="56" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="33" Y1="50" X2="33" Y2="56" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="39" Y1="50" X2="39" Y2="56" Stroke="#FF3333" StrokeThickness="2"/>
+                                </Canvas>
+                            </Viewbox>
+                            
+                            <TextBlock Grid.Row="1" Text="CPU" Foreground="{StaticResource AccentBrush}" 
+                                       FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" 
+                                       Margin="0,0,0,6" Opacity="0.7" TextAlignment="Center"/>
+                            
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                                <TextBlock x:Name="CpuUsageText" Text="0%" 
+                                           Foreground="{StaticResource TextBrush}" FontSize="28" 
+                                           FontWeight="Bold" HorizontalAlignment="Center"
+                                           Margin="0,0,0,10">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect Color="#FF3333" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                                
+                                <!-- Mini barra de progresso -->
+                                <Border Background="#15FFFFFF" CornerRadius="4" Height="4" Width="80">
+                                    <Border x:Name="CpuProgressBar" Background="#FF3333" 
+                                            CornerRadius="4" HorizontalAlignment="Left" Width="0">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="4" ShadowDepth="0" Opacity="0.6"/>
+                                        </Border.Effect>
+                                    </Border>
+                                </Border>
+                                <TextBlock x:Name="CpuStatusLabel"
+                                           Text="✅ Normal"
+                                           FontSize="9" FontWeight="SemiBold"
+                                           Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- RAM Card -->
+                    <Border Grid.Column="1" Background="{StaticResource SecondaryBackgroundBrush}" 
+                            CornerRadius="12" Padding="18" Margin="5"
+                            BorderThickness="1"
+                            BorderBrush="#30FF3333">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#FF3333" BlurRadius="15" ShadowDepth="0" Opacity="0.25"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Ícone RAM estilizado (módulo de memória) -->
+                            <Viewbox Grid.Row="0" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                <Viewbox.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource IconPulseAnimation}"/>
+                                    </EventTrigger>
+                                </Viewbox.Triggers>
+                                <Canvas Width="64" Height="64">
+                                    <!-- Base do módulo RAM (contorno) -->
+                                    <Rectangle Canvas.Left="12" Canvas.Top="20" Width="40" Height="28"
+                                               Stroke="#FF3333" StrokeThickness="2" Fill="Transparent" RadiusX="3" RadiusY="3">
+                                        <Rectangle.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
+                                        </Rectangle.Effect>
+                                    </Rectangle>
+                                    <!-- Dentes superiores (notch) -->
+                                    <Path Data="M 18,18 L 18,20 L 24,20 L 24,18 Z M 26,16 L 26,20 L 32,20 L 32,16 Z M 34,18 L 34,20 L 40,20 L 40,18 Z M 42,18 L 42,20 L 46,20 L 46,18 Z"
+                                          Stroke="#FF3333" StrokeThickness="1.5" Fill="Transparent"/>
+                                    <!-- Chips de memória contornados -->
+                                    <Rectangle Canvas.Left="16" Canvas.Top="26" Width="6" Height="10"
+                                               Stroke="#FF6666" StrokeThickness="1" Fill="Transparent" RadiusX="1" RadiusY="1"/>
+                                    <Rectangle Canvas.Left="24" Canvas.Top="26" Width="6" Height="10"
+                                               Stroke="#FF6666" StrokeThickness="1" Fill="Transparent" RadiusX="1" RadiusY="1"/>
+                                    <Rectangle Canvas.Left="32" Canvas.Top="26" Width="6" Height="10"
+                                               Stroke="#FF6666" StrokeThickness="1" Fill="Transparent" RadiusX="1" RadiusY="1"/>
+                                    <Rectangle Canvas.Left="40" Canvas.Top="26" Width="6" Height="10"
+                                               Stroke="#FF6666" StrokeThickness="1" Fill="Transparent" RadiusX="1" RadiusY="1"/>
+                                    <!-- Linha divisória -->
+                                    <Line X1="14" Y1="38" X2="50" Y2="38" Stroke="#FF6666" StrokeThickness="1"/>
+                                    <!-- Pinos inferiores -->
+                                    <Line X1="16" Y1="50" X2="16" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="20" Y1="50" X2="20" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="24" Y1="50" X2="24" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="28" Y1="50" X2="28" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="32" Y1="50" X2="32" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="36" Y1="50" X2="36" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="40" Y1="50" X2="40" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                    <Line X1="44" Y1="50" X2="44" Y2="54" Stroke="#FF3333" StrokeThickness="2"/>
+                                </Canvas>
+                            </Viewbox>
+                            
+                            <TextBlock Grid.Row="1" Text="RAM" Foreground="{StaticResource AccentBrush}" 
+                                       FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" 
+                                       Margin="0,0,0,6" Opacity="0.7" TextAlignment="Center"/>
+                            
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                                <TextBlock x:Name="RamUsageText" Text="0%" 
+                                           Foreground="{StaticResource TextBrush}" FontSize="28" 
+                                           FontWeight="Bold" HorizontalAlignment="Center"
+                                           Margin="0,0,0,10">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect Color="#FF3333" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                                
+                                <!-- Mini barra de progresso -->
+                                <Border Background="#15FFFFFF" CornerRadius="4" Height="4" Width="80">
+                                    <Border x:Name="RamProgressBar" Background="#FF3333" 
+                                            CornerRadius="4" HorizontalAlignment="Left" Width="0">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="4" ShadowDepth="0" Opacity="0.6"/>
+                                        </Border.Effect>
+                                    </Border>
+                                </Border>
+                                <TextBlock x:Name="RamStatusLabel"
+                                           Text="✅ Normal"
+                                           FontSize="9" FontWeight="SemiBold"
+                                           Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
+                                
+                                <!-- Popup de RAM liberada -->
+                                <Border x:Name="RamPopup" 
+                                        Background="#FF2E7D32" 
+                                        CornerRadius="8" 
+                                        Padding="8,4" 
+                                        Margin="0,8,0,0"
+                                        Visibility="Collapsed"
+                                        HorizontalAlignment="Center">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#FF2E7D32" BlurRadius="8" ShadowDepth="0" Opacity="0.6"/>
+                                    </Border.Effect>
+                                    <TextBlock x:Name="RamPopupText" 
+                                               Text="+3GB RAM (32%)" 
+                                               Foreground="White" 
+                                               FontSize="10" 
+                                               FontWeight="Bold"
+                                               HorizontalAlignment="Center"/>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- DISK Card -->
+                    <Border Grid.Column="2" Background="{StaticResource SecondaryBackgroundBrush}" 
+                            CornerRadius="12" Padding="18" Margin="5"
+                            BorderThickness="1"
+                            BorderBrush="#30FF3333">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#FF3333" BlurRadius="15" ShadowDepth="0" Opacity="0.25"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Ícone DISK estilizado (HDD/SSD) -->
+                            <Viewbox Grid.Row="0" Width="48" Height="48" HorizontalAlignment="Center" Margin="0,0,0,10">
+                                <Viewbox.Triggers>
+                                    <EventTrigger RoutedEvent="Loaded">
+                                        <BeginStoryboard Storyboard="{StaticResource IconPulseAnimation}"/>
+                                    </EventTrigger>
+                                </Viewbox.Triggers>
+                                <Canvas Width="64" Height="64">
+                                    <!-- Corpo do disco (contorno) -->
+                                    <Rectangle Canvas.Left="14" Canvas.Top="16" Width="36" Height="32"
+                                               Stroke="#FF3333" StrokeThickness="2" Fill="Transparent" RadiusX="3" RadiusY="3">
+                                        <Rectangle.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
+                                        </Rectangle.Effect>
+                                    </Rectangle>
+                                    <!-- Prato do disco -->
+                                    <Ellipse Canvas.Left="22" Canvas.Top="24" Width="20" Height="20"
+                                             Stroke="#FF6666" StrokeThickness="2" Fill="Transparent"/>
+                                    <!-- Centro do prato (ponto) -->
+                                    <Ellipse Canvas.Left="29" Canvas.Top="31" Width="6" Height="6"
+                                             Stroke="#FF6666" StrokeThickness="1.5" Fill="Transparent"/>
+                                    <!-- Braço de leitura -->
+                                    <Path Data="M 32,34 L 38,28 L 40,30 L 34,36 Z"
+                                          Stroke="#FF6666" StrokeThickness="1.5" Fill="Transparent"/>
+                                    <!-- Linhas de dados -->
+                                    <Line X1="17" Y1="20" X2="27" Y2="20" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <Line X1="17" Y1="23" X2="25" Y2="23" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <Line X1="38" Y1="40" X2="46" Y2="40" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <Line X1="38" Y1="43" X2="48" Y2="43" Stroke="#FF6666" StrokeThickness="1.4"/>
+                                    <!-- LED indicator -->
+                                    <Ellipse Canvas.Left="43" Canvas.Top="20" Width="4" Height="4"
+                                             Stroke="#FF6666" StrokeThickness="1.5" Fill="Transparent">
+                                        <Ellipse.Effect>
+                                            <DropShadowEffect Color="#FF6666" BlurRadius="6" ShadowDepth="0" Opacity="0.9"/>
+                                        </Ellipse.Effect>
+                                    </Ellipse>
+                                </Canvas>
+                            </Viewbox>
+                            
+                            <TextBlock Grid.Row="1" Text="DISK" Foreground="{StaticResource AccentBrush}" 
+                                       FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" 
+                                       Margin="0,0,0,6" Opacity="0.7" TextAlignment="Center"/>
+                            
+                            <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                                <TextBlock x:Name="DiskUsageText" Text="0%" 
+                                           Foreground="{StaticResource TextBrush}" FontSize="28" 
+                                           FontWeight="Bold" HorizontalAlignment="Center"
+                                           Margin="0,0,0,10">
+                                    <TextBlock.Effect>
+                                        <DropShadowEffect Color="#FF3333" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
+                                    </TextBlock.Effect>
+                                </TextBlock>
+                                
+                                <!-- Mini barra de progresso -->
+                                <Border Background="#15FFFFFF" CornerRadius="4" Height="4" Width="80">
+                                    <Border x:Name="DiskProgressBar" Background="#FF3333" 
+                                            CornerRadius="4" HorizontalAlignment="Left" Width="0">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#FF3333" BlurRadius="4" ShadowDepth="0" Opacity="0.6"/>
+                                        </Border.Effect>
+                                    </Border>
+                                </Border>
+                                <TextBlock x:Name="DiskStatusLabel"
+                                           Text="✅ Normal"
+                                           FontSize="9" FontWeight="SemiBold"
+                                           Foreground="#4CAF50"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+                
+                <!-- Módulos avançados + botões principais -->
+                <StackPanel Grid.Row="2"
+                            Orientation="Vertical"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,0,0,18">
+
+                    <!-- Power Plan Quick Switch -->
+                    <Border x:Name="PowerPlanCard"
+                            Background="{StaticResource SecondaryBackgroundBrush}"
+                            CornerRadius="10" BorderBrush="#FF2B2B2B" BorderThickness="1"
+                            Padding="14,10" Margin="0,0,0,8"
+                            HorizontalAlignment="Center">
+                        <Border.Resources>
+                            <Style x:Key="PlanBtnStyle" TargetType="Button">
+                                <Setter Property="Background" Value="#FF252525"/>
+                                <Setter Property="Foreground" Value="#FFAAAAAA"/>
+                                <Setter Property="BorderBrush" Value="#FF444444"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="Padding" Value="10,5"/>
+                                <Setter Property="FontSize" Value="11"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}"
+                                                    CornerRadius="6"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    Padding="{TemplateBinding Padding}">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#FF363636"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Border.Resources>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{DynamicResource PowerPlan_Label}"
+                                       FontSize="11" Foreground="#FF777777"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <Button x:Name="PlanBalancedBtn"
+                                    Content="{DynamicResource PowerPlan_Balanced}"
+                                    Tag="381b4222-f694-41f0-9685-ff5bb260df2e"
+                                    Style="{StaticResource PlanBtnStyle}"
+                                    Margin="0,0,4,0"
+                                    Click="PowerPlan_Click"/>
+                            <Button x:Name="PlanHighBtn"
+                                    Content="{DynamicResource PowerPlan_High}"
+                                    Tag="8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+                                    Style="{StaticResource PlanBtnStyle}"
+                                    Margin="0,0,4,0"
+                                    Click="PowerPlan_Click"/>
+                            <Button x:Name="PlanUltimateBtn"
+                                    Content="{DynamicResource PowerPlan_Ultimate}"
+                                    Tag="e9a42b02-d5df-448d-aa00-03f14749eb61"
+                                    Style="{StaticResource PlanBtnStyle}"
+                                    Click="PowerPlan_Click"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Startup Programs Warning Card -->
+                    <Border x:Name="StartupWarningCard"
+                            Background="#0E1525"
+                            CornerRadius="8" BorderBrush="#FF304060" BorderThickness="1"
+                            Padding="12,7" Margin="0,0,0,10"
+                            HorizontalAlignment="Center"
+                            MinWidth="420"
+                            Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,10,0">
+                                <TextBlock x:Name="StartupCountText"
+                                           Text="🚀 ..."
+                                           FontSize="12" FontWeight="SemiBold"
+                                           Foreground="#FFBBCCFF"/>
+                                <TextBlock x:Name="StartupHintText"
+                                           Text=""
+                                           FontSize="10" Foreground="#FF778899"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Content="{DynamicResource Startup_Manage}"
+                                    Click="StartupPrograms_Click"
+                                    Background="Transparent"
+                                    Foreground="#FF7799EE"
+                                    Cursor="Hand"
+                                    VerticalAlignment="Center">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border Background="{TemplateBinding Background}"
+                                                BorderBrush="#FF3355AA" BorderThickness="1"
+                                                CornerRadius="5" Padding="10,4">
+                                            <TextBlock Text="{TemplateBinding Content}"
+                                                       Foreground="{TemplateBinding Foreground}"
+                                                       FontSize="11" HorizontalAlignment="Center"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Text="{DynamicResource Advanced_Modules}"
+                               FontSize="16"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"
+                               HorizontalAlignment="Center"/>
+                    
+                    <!-- Removido: módulos extras. Mantido apenas os botões principais abaixo. -->
+
+                    <!-- Botões de ação principais -->
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Center">
+                        <!-- Botão Seletor de Otimizações -->
+                        <Button x:Name="SelectorButton"
+                                Content="{DynamicResource Btn_Configure}"
+                                Background="#333333"
+                                Foreground="{StaticResource TextBrush}"
+                                BorderThickness="0"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Padding="20,12"
+                                MinWidth="180"
+                                Height="52"
+                                Cursor="Hand"
+                                Margin="0,0,15,0"
+                                Click="SelectorButton_Click">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border Background="{TemplateBinding Background}"
+                                            CornerRadius="0"
+                                            BorderThickness="1"
+                                            BorderBrush="#555555">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#333333" BlurRadius="8" ShadowDepth="0" Opacity="0.5"/>
+                                        </Border.Effect>
+                                        <ContentPresenter HorizontalAlignment="Center" 
+                                                        VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#555555"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <!-- Agrupamento para o botão principal + GameBoost -->
+                        <StackPanel Orientation="Vertical"
+                                    HorizontalAlignment="Center">
+                            <!-- Botão Otimizar (estilo moderno com textura e shape) -->
+                            <Button x:Name="OptimizeButton"
+                                    Content="{DynamicResource Btn_Optimize}"
+                                    Style="{StaticResource OptimizeButtonStyle}"
+                                    Click="OptimizeButton_Click"/>
+
+                            <!-- GameBoost: Botão + Controles lado a lado -->
+                            <StackPanel Orientation="Horizontal" 
+                                        HorizontalAlignment="Center"
+                                        Margin="0,10,0,0">
+                                
+                                <!-- Botão GameBoost -->
+                                <Button x:Name="GameBoostButton"
+                                        Content="{DynamicResource Btn_GameBoost_Activate}"
+                                        Style="{StaticResource GameBoostButtonStyle}"
+                                        ToolTip="Ativa o GameBoost automático quando um jogo suportado estiver aberto"
+                                        VerticalAlignment="Center"
+                                        Click="GameBoostButton_Click"/>
+
+                                <!-- Card de controles ao lado do botão -->
+                                <Border x:Name="GameBoostControlsCard"
+                                        Background="{StaticResource SecondaryBackgroundBrush}"
+                                        CornerRadius="8"
+                                        Padding="10,8"
+                                        Margin="12,0,0,0"
+                                        BorderBrush="#40FF3333"
+                                        BorderThickness="1"
+                                        VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <!-- ComboBox de agressividade -->
+                                        <StackPanel Orientation="Vertical" Margin="0,0,10,0">
+                                            <TextBlock Text="{DynamicResource Label_Aggressiveness}"
+                                                       Foreground="{StaticResource SecondaryTextBrush}"
+                                                       FontSize="10"
+                                                       FontWeight="SemiBold"
+                                                       Margin="0,0,0,4"
+                                                       TextAlignment="Center"/>
+                                            <ComboBox x:Name="GameBoostAggressivenessCombo"
+                                                      Style="{StaticResource PillComboBoxStyle}"
+                                                      SelectionChanged="GameBoostAggressivenessCombo_SelectionChanged"
+                                                      Width="120">
+                                                <ComboBoxItem Content="{DynamicResource Agg_Low}"/>
+                                                <ComboBoxItem Content="{DynamicResource Agg_Medium}" IsSelected="True"/>
+                                                <ComboBoxItem Content="{DynamicResource Agg_High}"/>
+                                                <ComboBoxItem Content="{DynamicResource Agg_Extreme}"/>
+                                            </ComboBox>
+                                        </StackPanel>
+                                        
+                                        <!-- Badge de processos neutralizados -->
+                                        <Button x:Name="SuspendedPanelButton"
+                                                Content="{DynamicResource Suspended_NeutralizedCount_Zero}"
+                                                Style="{StaticResource BadgeButtonStyle}"
+                                                VerticalAlignment="Bottom"
+                                                MinWidth="130"
+                                                Click="SuspendedPanelButton_Click"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            
+                            <!-- Status do GameBoost com indicador visual aprimorado -->
+                            <StackPanel Orientation="Horizontal" 
+                                        HorizontalAlignment="Center" 
+                                        Margin="0,8,0,0"
+                                        Visibility="Collapsed">
+                                <!-- Indicador de limpeza automática de RAM -->
+                                <Border x:Name="RAMAutoCleanIndicator"
+                                        Background="#22FF3333"
+                                        CornerRadius="10"
+                                        Padding="8,4"
+                                        Margin="0,0,8,0"
+                                        Visibility="Collapsed"
+                                        VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse x:Name="RAMCleanPulse" 
+                                                 Width="6" Height="6" 
+                                                 Fill="#00FF00" 
+                                                 VerticalAlignment="Center"
+                                                 Margin="0,0,6,0">
+                                            <Ellipse.Effect>
+                                                <DropShadowEffect Color="#00FF00" BlurRadius="6" ShadowDepth="0" Opacity="0.8"/>
+                                            </Ellipse.Effect>
+                                        </Ellipse>
+                                        <TextBlock x:Name="RAMCleanStatusText"
+                                                   Text="Auto-Clean RAM: ON"
+                                                   FontSize="10"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#00FF00"
+                                                   VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            
+                            <!-- Status principal do GameBoost - linha separada -->
+                            <TextBlock x:Name="GameBoostStatusText"
+                                       Text="{DynamicResource GameBoost_Waiting}"
+                                       FontSize="12"
+                                       Foreground="{StaticResource AccentBrush}"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,8,0,0"/>
+
+                            <!-- Painel de processos suspensos (aparece quando solicitado) -->
+                            <Border x:Name="SuspendedPanel"
+                                    Background="{StaticResource SecondaryBackgroundBrush}"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6"
+                                    Padding="8"
+                                    Margin="0,10,0,0"
+                                    Width="500"
+                                    Visibility="Collapsed">
+                                <StackPanel>
+                                    <TextBlock Text="Processos pausados"
+                                               Foreground="{StaticResource TextBrush}"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"/>
+                                    <ListBox x:Name="SuspendedProcessesList"
+                                             Height="120"
+                                             Margin="0,6,0,6"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button Content="Atualizar lista"
+                                                Width="120"
+                                                Click="SuspendedRefreshButton_Click"/>
+                                        <Button Content="Retomar processo"
+                                                Width="180"
+                                                Margin="6,0,0,0"
+                                                Click="SuspendedResumeSelectedButton_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                    
+                    <!-- Botão para criar ponto de restauração manualmente -->
+                    <Button x:Name="CreateRestorePointButton"
+                            Content="{DynamicResource Btn_Backup}"
+                            Background="Transparent"
+                            Foreground="#777"
+                            BorderThickness="0"
+                            FontSize="10"
+                            HorizontalAlignment="Center"
+                            Margin="0,10,0,0"
+                            Cursor="Hand"
+                            Click="CreateRestorePointButton_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           Foreground="{TemplateBinding Foreground}"
+                                           TextDecorations="Underline"
+                                           HorizontalAlignment="Center"/>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Foreground" Value="#CCCCCC"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Foreground" Value="#444444"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+
+                    <!-- Banner de resultado pós-otimização -->
+                    <Border x:Name="OptimizationResultBanner"
+                            Background="#1A2E1A"
+                            BorderBrush="#4CAF50"
+                            BorderThickness="1"
+                            CornerRadius="10"
+                            Padding="18,12"
+                            Margin="0,14,0,0"
+                            HorizontalAlignment="Center"
+                            Visibility="Collapsed">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#4CAF50" BlurRadius="10" ShadowDepth="0" Opacity="0.35"/>
+                        </Border.Effect>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="ResultCompletedText"
+                                       Text="✅ Otimização concluída!"
+                                       Foreground="#4CAF50"
+                                       FontSize="13" FontWeight="Bold"
+                                       VerticalAlignment="Center"/>
+                            <Border Background="#22FFFFFF" CornerRadius="6"
+                                    Padding="12,4" Margin="14,0,0,0"
+                                    VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="💾 " FontSize="12" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="ResultRAMText"
+                                               Text="0 MB liberados"
+                                               Foreground="White" FontSize="12"
+                                               VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock x:Name="ResultTimeText"
+                                       Text=""
+                                       Foreground="#888" FontSize="11"
+                                       VerticalAlignment="Center"
+                                       Margin="14,0,0,0"/>
+                            <Button Content="✕"
+                                    Margin="12,0,0,0"
+                                    Background="Transparent" Foreground="#666"
+                                    BorderThickness="0" FontSize="13"
+                                    VerticalAlignment="Center" Cursor="Hand"
+                                    Click="ResultDismissButton_Click"
+                                    Style="{x:Null}">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <TextBlock Text="{TemplateBinding Content}"
+                                                   Foreground="{TemplateBinding Foreground}"
+                                                   HorizontalAlignment="Center"/>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Session Statistics Strip -->
+                    <Border x:Name="SessionStatsStrip"
+                            Background="#0A0F0A"
+                            CornerRadius="8" BorderBrush="#FF1E231E" BorderThickness="1"
+                            Padding="14,7" Margin="0,8,0,0"
+                            HorizontalAlignment="Center"
+                            Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📊 Esta sessão:  "
+                                       FontSize="11" Foreground="#FF555555"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SessionOptCountText"
+                                       Text="0 otimizações"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#FF7799BB"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Text="  ·  "
+                                       FontSize="11" Foreground="#FF333333"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SessionRAMText"
+                                       Text="0 MB liberados"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="#FF55AA77"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                </StackPanel>
+                
+                <!-- Área de saída de comandos + barra de progresso -->
+                <Grid Grid.Row="3">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="40"/>
+                    </Grid.RowDefinitions>
+
+                    <Border
+                            Grid.Row="0"
+                            Background="{StaticResource SecondaryBackgroundBrush}"
+                            BorderBrush="{StaticResource AccentBrush}"
+                            BorderThickness="1"
+                            CornerRadius="12"
+                            Margin="0,0,0,0"
+                            MinHeight="320"
+                            ClipToBounds="True">
+                        <!-- Tornar o terminal invisível aqui, pois passará a ser uma janela independente -->
+                        <Border.Visibility>
+                            <Visibility>Collapsed</Visibility>
+                        </Border.Visibility>
+                        <Border.Effect>
+                            <DropShadowEffect Color="#FF3333" BlurRadius="12" ShadowDepth="0" Opacity="0.35"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Cabeçalho moderno do terminal -->
+                            <Border Grid.Row="0"
+                                    Background="{StaticResource SecondaryBackgroundBrush}"
+                                    CornerRadius="12,12,0,0"
+                                    Padding="12,10"
+                                    BorderThickness="0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="{DynamicResource Terminal_Header}" 
+                                                   Foreground="{StaticResource TextBrush}" 
+                                                   FontWeight="SemiBold" 
+                                                   FontSize="12"/>
+                                        <!-- live badge -->
+                                        <Border Background="#22FF3333" CornerRadius="10" Padding="8,2" Margin="8,0,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="6" Height="6" Fill="#00FF00" VerticalAlignment="Center"/>
+                                                <TextBlock Text="{DynamicResource Terminal_LiveBadge}" Foreground="{StaticResource TextBrush}" FontSize="10" Margin="6,0,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                    
+                                    <!-- Toolbar do terminal -->
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ToggleButton x:Name="AutoScrollToggle"
+                                                      Content="{DynamicResource Toggle_AutoScroll_On}"
+                                                      IsChecked="True"
+                                                      Style="{StaticResource PillToggleStyle}"
+                                                      Checked="AutoScrollToggle_Checked"
+                                                      Unchecked="AutoScrollToggle_Unchecked"/>
+                                        <Button Content="⎘" ToolTip="{DynamicResource Tooltip_CopyAll}" Margin="8,0,0,0"
+                                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Terminal_CopyAll_Click"/>
+                                        <Button Content="🧹" ToolTip="{DynamicResource Tooltip_Clear}" Margin="8,0,0,0"
+                                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Terminal_Clear_Click"/>
+                                        <Button Content="💾" ToolTip="{DynamicResource Tooltip_Save}" Margin="8,0,0,0"
+                                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Terminal_Save_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            
+                            <!-- Conteúdo do terminal -->
+                            <TextBox Grid.Row="1"
+                                     x:Name="TerminalOutput"
+                                     Style="{StaticResource TerminalTextBoxStyle}"
+                                     Text="{DynamicResource Terminal_Ready}"
+                                     TextWrapping="Wrap"
+                                     AcceptsReturn="True"
+                                     VerticalAlignment="Stretch"
+                                     HorizontalAlignment="Stretch"
+                                     VerticalContentAlignment="Top"
+                                     Padding="15,12,15,12"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     FontSize="13">
+                                <TextBox.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Copiar tudo" Click="Terminal_CopyAll_Click"/>
+                                        <MenuItem Header="Limpar" Click="Terminal_Clear_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="Salvar log" Click="Terminal_Save_Click"/>
+                                    </ContextMenu>
+                                </TextBox.ContextMenu>
+                            </TextBox>
+                        </Grid>
+                    </Border>
+                </Grid>
+                
+                <!-- Barra de progresso com efeito Flame -->
+                <ProgressBar Grid.Row="2"
+                             x:Name="ProgressBar"
+                             Style="{StaticResource FlameProgressBarStyle}"
+                             Maximum="100"
+                             Value="0"
+                             Margin="30,0,30,20"
+                             VerticalAlignment="Bottom"
+                             Visibility="Collapsed"
+                             Panel.ZIndex="2"
+                             IsHitTestVisible="False"/>
+            </Grid>
+            
+            <!-- Rodapé com branding -->
+            <Border Grid.Row="2" 
+                    Background="{StaticResource SecondaryBackgroundBrush}"
+                    CornerRadius="0,0,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <TextBlock Grid.Column="0"
+                              Foreground="{StaticResource SecondaryTextBrush}"
+                              FontSize="10"
+                              VerticalAlignment="Center"
+                              Margin="15,0">
+                        <Run Text="v2.0 | "/>
+                        <Hyperlink NavigateUri="https://amathyzin.xyz" RequestNavigate="FooterLink_RequestNavigate" Foreground="{StaticResource SecondaryTextBrush}">
+                            <Run Text="Powered by aMathyzin Studio"/>
+                        </Hyperlink>
+                    </TextBlock>
+                    
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="15,0">
+                        <Ellipse Width="8" Height="8" Fill="#00FF00" Margin="0,0,5,0"/>
+                        <TextBlock x:Name="StatusText" 
+                                  Text="{DynamicResource Status_SystemOptimized}"
+                                  Foreground="{StaticResource SecondaryTextBrush}"
+                                  FontSize="10"
+                                  VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+        </Grid>
+    </Border>
+</Window>

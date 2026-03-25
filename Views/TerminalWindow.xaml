@@ -1,0 +1,78 @@
+<Window x:Class="MinimalOptimizer2.Views.TerminalWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource Terminal_WindowTitle}" Height="520" Width="860"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{StaticResource SecondaryBackgroundBrush}">
+    <Border Background="{StaticResource SecondaryBackgroundBrush}"
+            BorderBrush="{StaticResource AccentBrush}"
+            BorderThickness="1"
+            CornerRadius="12"
+            Margin="12">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Cabeçalho -->
+            <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundBrush}" CornerRadius="12,12,0,0" Padding="12,10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="{DynamicResource Terminal_Header}" Foreground="{StaticResource TextBrush}" FontWeight="SemiBold" FontSize="12"/>
+                        <Border Background="#22FF3333" CornerRadius="10" Padding="8,2" Margin="8,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Ellipse Width="6" Height="6" Fill="#00FF00" VerticalAlignment="Center"/>
+                                <TextBlock Text="{DynamicResource Terminal_LiveBadge}" Foreground="{StaticResource TextBrush}" FontSize="10" Margin="6,0,0,0"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ToggleButton x:Name="PopupAutoScrollToggle"
+                                      Content="{DynamicResource Toggle_AutoScroll_On}"
+                                      IsChecked="True"
+                                      Style="{StaticResource PillToggleStyle}"
+                                      Checked="PopupAutoScrollToggle_Checked"
+                                      Unchecked="PopupAutoScrollToggle_Unchecked"/>
+                        <Button Content="⎘" ToolTip="{DynamicResource Tooltip_CopyAll}" Margin="8,0,0,0"
+                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Popup_CopyAll_Click"/>
+                        <Button Content="🧹" ToolTip="{DynamicResource Tooltip_Clear}" Margin="8,0,0,0"
+                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Popup_Clear_Click"/>
+                        <Button Content="💾" ToolTip="{DynamicResource Tooltip_Save}" Margin="8,0,0,0"
+                                Style="{StaticResource ToolbarIconButtonStyle}" Click="Popup_Save_Click"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Conteúdo -->
+            <TextBox Grid.Row="1"
+                     x:Name="PopupTerminalOutput"
+                     Style="{StaticResource TerminalTextBoxStyle}"
+                     Text="{DynamicResource Terminal_Starting}"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     VerticalAlignment="Stretch"
+                     HorizontalAlignment="Stretch"
+                     VerticalContentAlignment="Top"
+                     Padding="15,12,15,12"
+                     VerticalScrollBarVisibility="Auto"
+                     HorizontalScrollBarVisibility="Disabled"
+                     FontSize="13">
+                <TextBox.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="{DynamicResource Context_CopyAll}" Click="Popup_CopyAll_Click"/>
+                        <MenuItem Header="{DynamicResource Context_Clear}" Click="Popup_Clear_Click"/>
+                        <Separator/>
+                        <MenuItem Header="{DynamicResource Context_SaveLog}" Click="Popup_Save_Click"/>
+                    </ContextMenu>
+                </TextBox.ContextMenu>
+            </TextBox>
+        </Grid>
+    </Border>
+</Window>
