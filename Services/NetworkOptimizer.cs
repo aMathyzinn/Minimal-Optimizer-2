@@ -250,15 +250,6 @@ namespace MinimalOptimizer2.Services
                             key.SetValue("TcpTimedWaitDelay", 30, RegistryValueKind.DWord);
                             Logger.Info("TIME_WAIT reduzido para 30s");
                             
-                            // REMOVIDO: TcpWindowSize - Windows gerencia automaticamente (auto-tuning)
-                            // REMOVIDO: DefaultTTL - Valor padrão de 128 é ideal, 64 pode causar problemas
-                            // REMOVIDO: EnablePMTUBHDetect - Desabilitar pode causar problemas em algumas redes
-                            // REMOVIDO: TcpMaxDupAcks - Valor padrão é otimizado pelo Windows
-                            // REMOVIDO: TcpMaxConnectRetransmissions - Reduzir pode causar falhas em redes lentas
-                            // REMOVIDO: TcpMaxDataRetransmissions - Reduzir pode causar perda de dados
-                            // REMOVIDO: TcpNumConnections - Limite irrelevante em sistemas modernos
-                            // REMOVIDO: TcpReceiveBufferSize/TcpSendBufferSize - Windows auto-tuning é superior
-                            // REMOVIDO: TcpCongestionAlgorithm - Pode não ser suportado ou causar instabilidade
                             
                             optimized = true;
                         }
